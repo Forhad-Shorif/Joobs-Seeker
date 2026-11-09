@@ -9,7 +9,7 @@ import { StatsSection } from "@/components/stats-section"
 
 export default function Page() {
   return (
-    <div className="min-h-svh bg-black text-white">
+    <div className="min-h-svh bg-[#050505] text-white">
       <SiteHeader />
 
       <main>

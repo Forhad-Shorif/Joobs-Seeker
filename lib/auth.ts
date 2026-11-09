@@ -1,31 +1,29 @@
-import { betterAuth } from "better-auth";
-import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "@better-auth/mongo-adapter";
+import { betterAuth } from "better-auth"
+import { MongoClient } from "mongodb"
+import { mongodbAdapter } from "@better-auth/mongo-adapter"
 
-const mongoUrl = process.env.MONGODB_SECRET_URL_ID ?? "mongodb://127.0.0.1:27017"
-const client = new MongoClient(mongoUrl);
-const db = client.db("sign_projects");
+import dns from "node:dns";
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
+
+// ⚠️ .env file e MONGODB_SECRET_URL_ID = tomar MongoDB connection string
+const client = new MongoClient(`${process.env.MONGODB_SECRET_URL_ID}`)
+const db = client.db("Jobs-Secar")
 
 export const auth = betterAuth({
-
-  //...other options
   emailAndPassword: {
     enabled: true,
   },
-
-  
-  socialProviders: {
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID as string,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
-    },
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    },
+  user: {
+    additionalFields: {
+      role: {
+        type: ["seeker","recruiter","admin"],
+        input: false
+      }
+    }
   },
-
+  // User data MongoDB te save hobe
   database: mongodbAdapter(db, {
     client,
   }),
-});
+})

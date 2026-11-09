@@ -1,16 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowRight, ChartColumn, Crown, Plus, Zap } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
+import { ArrowRight, ChartColumn, Check, Crown, Zap } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { SectionHeading } from "@/components/section-heading"
 
 type Plan = {
   name: string
   icon: LucideIcon
-  monthlyPrice: number
+  price: number
   features: string[]
   featured?: boolean
 }
@@ -19,33 +19,33 @@ const plans: Plan[] = [
   {
     name: "Starter",
     icon: Crown,
-    monthlyPrice: 0,
+    price: 0,
     features: [
       "Daily AI match brief (top 5)",
       "Verified salary bands",
       "Company insight dashboards",
-      "1-click apply, unlimited",
+      "Unlimited one-click apply",
     ],
   },
   {
     name: "Growth",
     icon: ChartColumn,
-    monthlyPrice: 17,
+    price: 17,
     featured: true,
     features: [
-      "Daily AI match brief (top 5)",
-      "Verified salary bands",
-      "Company insight dashboards",
-      "1-click apply, unlimited",
+      "Everything in Starter",
+      "Priority recruiter visibility",
+      "Advanced skill matching",
+      "Weekly career coaching",
     ],
   },
   {
     name: "Premium",
     icon: Zap,
-    monthlyPrice: 99,
+    price: 99,
     features: [
-      "Everything in Pro",
-      "Multi-profile career portfolios",
+      "Everything in Growth",
+      "Multi-profile portfolios",
       "Shared talent rooms",
       "Recruiter view (read-only)",
     ],
@@ -58,27 +58,29 @@ export function PricingSection() {
   const [isYearly, setIsYearly] = useState(false)
 
   return (
-    <section id="pricing" className="scroll-mt-20 bg-black px-6 py-24 md:py-32">
+    <section
+      id="pricing"
+      className="scroll-mt-20 bg-[#050505] px-5 py-20 sm:px-8 sm:py-24 lg:py-28"
+    >
       <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="Pricing"
           title={
             <>
               Pay for the leverage,
-              <br />
-              not the listings
+              <br className="hidden sm:block" /> not the listings
             </>
           }
         />
 
-        {/* Monthly / Yearly switch */}
-        <div className="mt-10 flex justify-center">
-          <div className="flex items-center rounded-full border border-white/30 bg-neutral-300 p-1">
+        <div className="mt-9 flex justify-center">
+          <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
             <button
               type="button"
               onClick={() => setIsYearly(false)}
-              className={`rounded-full px-6 py-2.5 text-sm font-medium transition ${
-                isYearly ? "text-black/50" : "bg-white text-black"
+              aria-pressed={!isYearly}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition sm:px-6 ${
+                isYearly ? "text-white/50 hover:text-white/80" : "bg-white text-black"
               }`}
             >
               Monthly
@@ -87,19 +89,20 @@ export function PricingSection() {
             <button
               type="button"
               onClick={() => setIsYearly(true)}
-              className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium transition ${
-                isYearly ? "bg-white text-black" : "text-black/50"
+              aria-pressed={isYearly}
+              className={`flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition sm:px-6 ${
+                isYearly ? "bg-white text-black" : "text-white/50 hover:text-white/80"
               }`}
             >
               Yearly
-              <span className="rounded-full bg-fuchsia-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                 25%
               </span>
             </button>
           </div>
         </div>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-3">
+        <div className="mt-10 grid gap-5 sm:mt-14 lg:grid-cols-3">
           {plans.map((plan) => (
             <PlanCard key={plan.name} plan={plan} isYearly={isYearly} />
           ))}
@@ -110,38 +113,44 @@ export function PricingSection() {
 }
 
 function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
-  const { icon: Icon, name, monthlyPrice, features, featured } = plan
-  const price = isYearly ? Math.round(monthlyPrice * YEARLY_DISCOUNT) : monthlyPrice
+  const { icon: Icon, name, price, features, featured } = plan
+  const currentPrice = isYearly ? Math.round(price * YEARLY_DISCOUNT) : price
 
   return (
     <article
-      className={`flex flex-col rounded-2xl border p-6 md:p-7 lg:min-h-[520px] ${
+      className={`relative flex flex-col rounded-3xl border p-6 transition duration-300 sm:p-7 ${
         featured
-          ? "border-white/20 bg-[#141414] shadow-[0_0_80px_-20px_rgba(139,92,246,0.45)]"
-          : "border-white/10 bg-[#101010]"
+          ? "border-violet-400/30 bg-[#121018] shadow-[0_0_80px_-25px_rgba(139,92,246,0.55)]"
+          : "border-white/[0.08] bg-[#0e0e0e] hover:border-white/15"
       }`}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-white/5">
-            <Icon className="size-5 text-violet-400" strokeWidth={1.5} />
+          <div className="flex size-10 items-center justify-center rounded-xl bg-white/5">
+            <Icon className="size-5 text-violet-300" strokeWidth={1.5} />
           </div>
           <h3 className="text-lg font-medium text-white">{name}</h3>
         </div>
 
         <p className="text-3xl font-semibold tracking-tight text-white">
-          ${price}
+          ${currentPrice}
           <span className="ml-1 text-xs font-normal text-white/40">/month</span>
         </p>
       </div>
 
-      <p className="mt-8 text-sm font-medium text-white">Start building your insights hub:</p>
+      {featured && (
+        <span className="mt-4 w-fit rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-1 text-[10px] font-semibold tracking-wider text-violet-200 uppercase">
+          Most popular
+        </span>
+      )}
 
-      <ul className="mt-5 space-y-4">
+      <p className="mt-6 text-sm font-medium text-white">Start building your insights hub:</p>
+
+      <ul className="mt-5 mb-8 space-y-3.5">
         {features.map((feature) => (
-          <li key={feature} className="flex items-center gap-3 text-sm text-white/70">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-white/10">
-              <Plus className="size-3 text-white" />
+          <li key={feature} className="flex items-start gap-3 text-sm text-white/60">
+            <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-500/10">
+              <Check className="size-3 text-violet-300" strokeWidth={2.5} />
             </span>
             {feature}
           </li>
@@ -149,11 +158,11 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
       </ul>
 
       <Link
-        href="#"
-        className={`mt-10 flex h-12 items-center justify-between rounded-lg px-5 text-sm font-medium transition lg:mt-auto ${
+        href="/sign-up"
+        className={`mt-auto flex h-11 items-center justify-between rounded-xl px-5 text-sm font-medium transition ${
           featured
             ? "bg-white text-black hover:bg-white/90"
-            : "bg-white/10 text-white hover:bg-white/15"
+            : "border border-white/10 bg-white/5 text-white hover:bg-white/10"
         }`}
       >
         Choose This Plan

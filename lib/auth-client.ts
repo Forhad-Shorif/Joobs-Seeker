@@ -1,5 +1,24 @@
 import { createAuthClient } from "better-auth/react"
+
+/**
+ * 🔐 BETTER AUTH CLIENT
+ * ------------------------------------------------------------------
+ * Ei file ta browser (client side) theke login / signup / session er
+ * kaj gulo kore. Example:
+ *
+ *   authClient.signIn.email({...})   -> email diye login
+ *   authClient.signUp.email({...})   -> email diye account khula
+ *   authClient.useSession()          -> current user er info paoa
+ *   authClient.updateUser({...})     -> name / image update
+ *   authClient.signOut()             -> logout
+ *
+ * baseURL:
+ * - Localhost e kisu set korte hobe na, browser nijei current domain use kore.
+ * - Deploy korar por jodi app and API same domain e thake, tokhon o kisu
+ *   set korte hobe na.
+ * - Jodi alada domain hoy, tokhon hosting er environment variable e
+ *   NEXT_PUBLIC_APP_URL=https://tomar-domain.com set koro.
+ */
 export const authClient = createAuthClient({
-    /** The base URL of the server (optional if you're using the same domain) */
-    baseURL: "http://localhost:3000"
+  baseURL: process.env.NEXT_PUBLIC_APP_URL,
 })

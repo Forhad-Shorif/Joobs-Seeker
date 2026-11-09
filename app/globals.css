@@ -125,5 +125,11 @@
     }
   html {
     @apply font-sans;
+    color-scheme: dark;
     }
+}
+
+::selection {
+  background: rgb(139 92 246 / 35%);
+  color: white;
 }
