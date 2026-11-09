@@ -1,4 +1,7 @@
 import { createAuthClient } from "better-auth/react"
+import { inferAdditionalFields } from "better-auth/client/plugins"
+
+import type { auth } from "@/lib/auth"
 
 /**
  * 🔐 BETTER AUTH CLIENT
@@ -21,4 +24,7 @@ import { createAuthClient } from "better-auth/react"
  */
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_APP_URL,
+  // Server er additional fields (jemon: role) client e type-safe kore.
+  // Ei line thakle signUp.email({ role: "seeker" }) likhle TypeScript error debe na.
+  plugins: [inferAdditionalFields<typeof auth>()],
 })

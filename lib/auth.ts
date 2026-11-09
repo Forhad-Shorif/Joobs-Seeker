@@ -16,11 +16,18 @@ export const auth = betterAuth({
   },
   user: {
     additionalFields: {
+      // 🎭 ROLE
+      // ------------------------------------------------------------------
+      // Signup er somoy user nijei select kore: "seeker", "recruiter" or "admin".
+      // input: true -> client (sign-up form) theke ei field ta pathate parbe.
+      // defaultValue -> kono karone role na pathale "seeker" hobe.
       role: {
-        type: ["seeker","recruiter","admin"],
-        input: false
-      }
-    }
+        type: ["seeker", "recruiter", "admin"],
+        required: true,
+        defaultValue: "seeker",
+        input: true,
+      },
+    },
   },
   // User data MongoDB te save hobe
   database: mongodbAdapter(db, {

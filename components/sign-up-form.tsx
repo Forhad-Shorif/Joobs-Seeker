@@ -3,12 +3,59 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { AlertCircle, ArrowRight, Eye, EyeOff, Image as ImageIcon, Lock, Mail, UserRound } from "lucide-react"
+import {
+  AlertCircle,
+  ArrowRight,
+  Briefcase,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Upload,
+  UserRound,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { FaGithub, FaGoogle } from "react-icons/fa6"
 
 import { AuthField } from "@/components/auth-field"
 import { authClient } from "@/lib/auth-client"
+import { compressImage } from "@/lib/image"
 import { showToast } from "@/lib/toast"
+
+// ------------------------------------------------------------------
+// 🎭 USER ROLE
+// ------------------------------------------------------------------
+// Signup er somoy user ei tin ta option theke ekta select korbe.
+// `type UserRole` server er lib/auth.ts er role field er sathe milte hobe.
+type UserRole = "seeker" | "recruiter" | "admin"
+
+const roleOptions: {
+  value: UserRole
+  label: string
+  description: string
+  icon: LucideIcon
+}[] = [
+    {
+      value: "seeker",
+      label: "Seeker",
+      description: "I am looking for a job.",
+      icon: UserRound,
+    },
+    {
+      value: "recruiter",
+      label: "Recruiter",
+      description: "I want to hire talented people.",
+      icon: Briefcase,
+    },
+    {
+      value: "admin",
+      label: "Admin",
+      description: "I will manage the platform.",
+      icon: ShieldCheck,
+    },
+  ]
 
 // Password koto strong, seta check korar rules
 const passwordRules = [
@@ -17,23 +64,76 @@ const passwordRules = [
   { label: "One number", test: (value: string) => /\d/.test(value) },
 ]
 
+// Profile picture er maximum size: 5MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
 export function SignUpForm() {
   const router = useRouter()
 
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
 
-  // Avatar Image URL state for live preview
-  const [avatarUrl, setAvatarUrl] = useState("")
+  // 🎭 Role state: default holo "seeker"
+  const [role, setRole] = useState<UserRole>("seeker")
+
+  // 🖼️ Image state
+  // imageMode = "url"  -> user image link paste korbe
+  // imageMode = "file" -> user nijer computer theke chobi upload korbe
+  const [imageMode, setImageMode] = useState<"url" | "file">("url")
+  const [avatar, setAvatar] = useState("")
+  const [isReadingImage, setIsReadingImage] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
   const passedRules = passwordRules.filter((rule) => rule.test(password)).length
+  const selectedRole = roleOptions.find((option) => option.value === role) ?? roleOptions[0]
+
+  // Image mode paltole purono preview clean kore dei
+  function handleImageModeChange(nextMode: "url" | "file") {
+    setImageMode(nextMode)
+    setAvatar("")
+  }
+
+  // User file select korle: check kori -> choto kori -> preview state e rakhi
+  async function handleImageFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.target
+    const file = input.files?.[0]
+
+    if (!file) return
+
+    // File ta really image kina check
+    if (!file.type.startsWith("image/")) {
+      showToast.error("Please choose an image file.")
+      return
+    }
+
+    // 5MB er cheye boro hole bondho kori
+    if (file.size > MAX_IMAGE_SIZE) {
+      showToast.error("Image must be 5MB or smaller.")
+      return
+    }
+
+    try {
+      setIsReadingImage(true)
+
+      // lib/image.ts er helper: chobi 512px e choto kore data URL banay
+      setAvatar(await compressImage(file))
+      showToast.success("Photo selected.")
+    } catch (error) {
+      console.error("Image processing failed:", error)
+      showToast.error("Could not read this image. Please try another one.")
+    } finally {
+      setIsReadingImage(false)
+      // Ek e chobi abar select korleo onChange jeno kaj kore
+      input.value = ""
+    }
+  }
 
   /**
-   * 🧾 ACCOUNT CREATE (Using Object.fromEntries)
+   * 🧾 ACCOUNT CREATE
    * ------------------------------------------------------------------
+   * Form theke name/email/password nisi, ar role + image state theke nisi.
    */
   async function handleSignUp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -41,35 +141,31 @@ export function SignUpForm() {
     setLoading(true)
     setErrorMessage("")
 
-    // 👉 আপনার চাওয়া মেথডটি এখানে ব্যবহার করা হয়েছে
     const formData = new FormData(event.currentTarget)
     const user = Object.fromEntries(formData.entries()) as {
       name: string
       email: string
       password: string
-      image?: string
     }
-
-    // যদি ইমেজ ফিল্ড খালি থাকে, তবে undefined করে দেওয়া ভালো
-    const Userdata = {
-      name: user.name,
-      email: user.email,
-      password: user.password,
-      image: avatarUrl || undefined,
-    }
-
-    console.log(Userdata)
 
     try {
-      const { data, error } = await authClient.signUp.email(Userdata)
-      console.log(data)
+      const { error } = await authClient.signUp.email({
+        name: user.name,
+        email: user.email,
+        password: user.password,
+        // Image na dile undefined pathai, jate database e empty string na jay
+        image: avatar.trim() || undefined,
+        // 🎭 User je role select koreche, seta server e pathai
+        role,
+      })
 
       if (error) {
-        showToast.error("Some thing went rong")
+        setErrorMessage(error.message || "Could not create your account.")
+        showToast.error(error.message || "Could not create your account.")
         return
       }
 
-      // ✅ Account create + auto login সফল হয়েছে
+      // ✅ Account create + auto login sokol hoye geche
       showToast.success("Account created! Welcome to HireLoop.")
       router.push("/")
       router.refresh()
@@ -82,44 +178,20 @@ export function SignUpForm() {
     }
   }
 
-  /**
-   * 🌐 GOOGLE / GITHUB SIGN UP
-   * ------------------------------------------------------------------
-   */
-  // async function handleSocialSignUp(provider: "google" | "github") {
-  //   try {
-  //     setLoading(true)
+  // 🌐 GOOGLE / GITHUB SIGN UP
+  const handleGoogleSignIn = async () => {
+    await authClient.signIn.social({
+      provider: "google",
+      callbackURL: "/",
+    })
+  }
 
-  //     const { data , error } = await authClient.signIn.social({ provider, callbackURL: "/" })
-      
-  //      console.log(data)
-  //     if (error) {
-  //       showToast.error(
-  //         `${provider === "google" ? "Google" : "GitHub"} login is not set up yet.`,
-  //       )
-  //       setLoading(false)
-  //     }
-  //   } catch (error) {
-  //     console.error(`${provider} sign up failed:`, error)
-  //     showToast.error(`${provider === "google" ? "Google" : "GitHub"} login is not set up yet.`)
-  //     setLoading(false)
-  //   }
-  // }
-
-    const handleGoogleSignIn = async () => {
-      await authClient.signIn.social({
-        provider: "google",
-        callbackURL: "/",
-      });
-    };
-  
-    // GitHub Sign In Handler
-    const handleGithubSignIn = async () => {
-      await authClient.signIn.social({
-        provider: "github",
-        callbackURL: "/",
-      });
-    };
+  const handleGithubSignIn = async () => {
+    await authClient.signIn.social({
+      provider: "github",
+      callbackURL: "/",
+    })
+  }
 
   return (
     <div>
@@ -138,7 +210,6 @@ export function SignUpForm() {
         <div className="mt-7 grid grid-cols-2 gap-3">
           <button
             type="button"
-            // onClick={() => handleSocialSignUp("google")}
             onClick={handleGoogleSignIn}
             disabled={loading}
             className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/80 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
@@ -148,7 +219,6 @@ export function SignUpForm() {
           </button>
           <button
             type="button"
-            // onClick={() => handleSocialSignUp("github")}
             onClick={handleGithubSignIn}
             disabled={loading}
             className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/80 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
@@ -173,27 +243,116 @@ export function SignUpForm() {
         )}
 
         <form className="space-y-5" onSubmit={handleSignUp}>
-          {/* Profile photo URL input with live preview */}
-          <div className="flex items-center gap-4">
-            <div
-              className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] bg-cover bg-center text-white/40"
-              style={avatarUrl ? { backgroundImage: `url(${avatarUrl})` } : undefined}
-            >
-              {!avatarUrl && <UserRound className="size-6" />}
+          {/* ---------------------------------------------------------- */}
+          {/* 🖼️ PROFILE PHOTO: URL diye ba file upload diye                */}
+          {/* ---------------------------------------------------------- */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div
+                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] bg-cover bg-center text-white/40"
+                style={avatar ? { backgroundImage: `url("${avatar}")` } : undefined}
+              >
+                {!avatar && <UserRound className="size-6" />}
+              </div>
+
+              <div className="flex-1 space-y-2">
+                {/* Image source choose: URL or File */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleImageModeChange("url")}
+                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs transition ${imageMode === "url"
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
+                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                      }`}
+                  >
+                    Image URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleImageModeChange("file")}
+                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs transition ${imageMode === "file"
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
+                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                      }`}
+                  >
+                    Upload file
+                  </button>
+                </div>
+
+                {imageMode === "url" ? (
+                  <AuthField
+                    id="image"
+                    label="Profile Photo URL"
+                    icon={ImageIcon}
+                    type="url"
+                    placeholder="https://example.com/avatar.jpg"
+                    value={avatar}
+                    onChange={(event) => setAvatar(event.target.value)}
+                  />
+                ) : (
+                  <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.08]">
+                    <Upload className="size-4" />
+                    {isReadingImage
+                      ? "Reading image..."
+                      : avatar
+                        ? "Change photo"
+                        : "Choose photo"}
+
+                    {/* Real file input ta hide kora, label e click korle input open hobe */}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageFile}
+                      disabled={isReadingImage}
+                    />
+                  </label>
+                )}
+              </div>
             </div>
 
-            <div className="w-full">
-              <AuthField
-                id="image"
-                name="image"
-                label="Profile Photo URL"
-                icon={ImageIcon}
-                type="url"
-                placeholder="https://example.com/avatar.jpg"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-              />
+            {avatar && (
+              <button
+                type="button"
+                onClick={() => setAvatar("")}
+                className="text-xs text-white/35 transition hover:text-rose-300"
+              >
+                Remove photo
+              </button>
+            )}
+          </div>
+
+          {/* ---------------------------------------------------------- */}
+          {/* 🎭 ROLE SELECT                                                */}
+          {/* ---------------------------------------------------------- */}
+          <div className="space-y-2">
+            <span className="block text-sm font-medium text-white/80">I am a</span>
+
+            <div className="grid grid-cols-3 gap-2">
+              {roleOptions.map((option) => {
+                const Icon = option.icon
+                const isSelected = role === option.value
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setRole(option.value)}
+                    aria-pressed={isSelected}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${isSelected
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200 ring-4 ring-violet-500/10"
+                        : "border-white/10 bg-white/[0.04] text-white/50 hover:border-white/20 hover:text-white"
+                      }`}
+                  >
+                    <Icon className="size-4" />
+                    {option.label}
+                  </button>
+                )
+              })}
             </div>
+
+            <p className="text-xs text-white/35">{selectedRole.description}</p>
           </div>
 
           <AuthField
@@ -283,12 +442,11 @@ export function SignUpForm() {
             />
             <span>
               I agree to the{" "}
-              <Link href={"ds"} className="text-white/70 hover:text-white">
+              <Link href="/terms" className="text-white/70 hover:text-white">
                 Terms
-              </Link>
-              {" "}
+              </Link>{" "}
               and{" "}
-              <Link href={""} className="text-white/70 hover:text-white">
+              <Link href="/privacy" className="text-white/70 hover:text-white">
                 Privacy Policy
               </Link>
               .
@@ -297,14 +455,14 @@ export function SignUpForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || isReadingImage}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-medium text-white shadow-[0_0_35px_-12px_rgba(139,92,246,1)] transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Creating account..." : "Create account"}
             <ArrowRight className="size-4" />
           </button>
-        </form >
-      </div >
+        </form>
+      </div>
     </div>
   )
 }
