@@ -6,25 +6,26 @@ import type { auth } from "@/lib/auth"
 /**
  * 🔐 BETTER AUTH CLIENT
  * ------------------------------------------------------------------
- * Ei file ta browser (client side) theke login / signup / session er
- * kaj gulo kore. Example:
+ * এই ফাইল browser (client side) থেকে login / signup / session-এর
+ * কাজগুলো করে। উদাহরণ:
  *
- *   authClient.signIn.email({...})   -> email diye login
- *   authClient.signUp.email({...})   -> email diye account khula
- *   authClient.useSession()          -> current user er info paoa
- *   authClient.updateUser({...})     -> name / image update
- *   authClient.signOut()             -> logout
+ *   authClient.signIn.email({...})   → email দিয়ে login
+ *   authClient.signUp.email({...})   → email দিয়ে account খোলা
+ *   authClient.useSession()          → current user-এর তথ্য পাওয়া
+ *   authClient.getSession()          → একবার session চেক করা
+ *   authClient.updateUser({...})     → name / image update
+ *   authClient.signOut()             → logout
  *
  * baseURL:
- * - Localhost e kisu set korte hobe na, browser nijei current domain use kore.
- * - Deploy korar por jodi app and API same domain e thake, tokhon o kisu
- *   set korte hobe na.
- * - Jodi alada domain hoy, tokhon hosting er environment variable e
- *   NEXT_PUBLIC_APP_URL=https://tomar-domain.com set koro.
+ * - Localhost-এ কিছু সেট করতে হয় না, browser নিজেই current domain ব্যবহার করে।
+ * - Deploy করার পর app আর API একই domain-এ থাকলে কিছু সেট করতে হয় না।
+ * - আলাদা domain হলে hosting-এর environment variable-এ
+ *   NEXT_PUBLIC_APP_URL=https://tomar-domain.com সেট করো।
  */
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_APP_URL,
-  // Server er additional fields (jemon: role) client e type-safe kore.
-  // Ei line thakle signUp.email({ role: "seeker" }) likhle TypeScript error debe na.
+  // server-এর additional fields (যেমন: role) client-এ type-safe করে।
+  // এই line থাকলে authClient.signUp.email({ role: "seeker" }) লিখলে
+  // TypeScript error দেবে না।
   plugins: [inferAdditionalFields<typeof auth>()],
 })

@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { authClient } from "@/lib/auth-client"
 import { saveProfileDetails, type ProfileDetails } from "@/lib/profile-details"
 import { showToast } from "@/lib/toast"
 
@@ -183,7 +184,7 @@ function FormSection({
 
 /**
  * মূল ফর্ম (parent: components/profile-view.tsx)।
- * - email → সেভ করার সময় এই ইমেইল দিয়েই ডেটা যায়
+ * - email → session না পাওয়া গেলে fallback হিসেবে ব্যবহার হয়
  * - details → ফর্মের সব ডেটা (অভিভাবক ProfileView-তে রাখা)
  * - onDetailsChange → ডেটা বদলালে ProfileView-কে জানানো হয়
  */
@@ -196,7 +197,7 @@ export function ProfileForm({
   details: ProfileDetails
   onDetailsChange: (details: ProfileDetails) => void
 }) {
-  // skill ইনপুটে এখন কী টাইপ হচ্ছে + সেভ চলছে কি না
+  // স্কিল ইনপুটে এখন কী টাইপ হচ্ছে + সেভ চলছে কি না
   const [skillInput, setSkillInput] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
@@ -205,7 +206,7 @@ export function ProfileForm({
     onDetailsChange({ ...details, ...changes })
 
   // ---------- স্কিল লজিক ----------
-  // টাইপ করা স্কিল যোগ করে; একই স্কিল (case না মিলিয়ে) আবার যোগ হয় না
+  // টাইপ করা স্কিল যোগ করে; একই স্কিল (কেস না মিলিয়ে) আবার যোগ হয় না
   function addSkill() {
     const value = skillInput.trim()
     if (!value) return
@@ -218,7 +219,7 @@ export function ProfileForm({
     setSkillInput("")
   }
 
-  // Enter চাপলে skill যোগ হবে, কিন্তু form সাবমিট হবে না
+  // এন্টার চাপলে স্কিল যোগ হবে, কিন্তু ফর্ম সাবমিট হবে না
   function handleSkillKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return
     event.preventDefault()
@@ -243,7 +244,28 @@ export function ProfileForm({
           : details.skills
       const valuesToSave: ProfileDetails = { ...details, skills }
 
-      await saveProfileDetails(email, valuesToSave)
+      // ----------------------------------------------------------------
+      // 🔐 সেশন → ইউজার → ব্যাকএন্ড (ধাপে ধাপে)
+      // ----------------------------------------------------------------
+      // ১. ব্রাউজার থেকে নতুন session নাও।
+      //    (সাইনআপ/লগইনের সময় cookie save হয়, তাই এখানে user পাওয়া যায়)
+      const { data: session, error } = await authClient.getSession()
+
+      // ২. session থেকে ইউজার বের করো
+      const user = session?.user
+
+      if (error) {
+        console.error("Could not load session:", error)
+      }
+
+      // 💡 হিন্ট: session না পেলে আগের prop email-টাই ফলব্যাক হিসেবে ব্যবহার করি
+      const userEmail = user?.email ?? email
+
+      // ⚠️ আগে ফর্মের ডেটা browser-এর localStorage-এ রাখা হতো।
+      //    এখন এখান থেকেই backend-এ যাচ্ছে (lib/profile-details.ts দেখো)।
+      // ৩. user.email + ফর্মের details একসাথে ব্যাকএন্ডে পাঠাও।
+      //    saveProfileDetails ভিতরে POST /api/profile-details এ fetch করে।
+      await saveProfileDetails(userEmail, valuesToSave)
 
       onDetailsChange(valuesToSave)
       setSkillInput("")

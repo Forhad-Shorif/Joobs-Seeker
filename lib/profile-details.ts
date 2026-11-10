@@ -74,7 +74,7 @@ export async function loadProfileDetails(
  *     body: JSON.stringify({ email, details }),
  *   })
  */
-export async function saveProfileDetails(
+export async function saveProfileDetails( 
   email: string,
   details: ProfileDetails
 ): Promise<void> {

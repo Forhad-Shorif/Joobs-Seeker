@@ -30,7 +30,12 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("scroll-smooth antialiased", fontMono.variable, "font-sans", geist.variable)}
+      className={cn(
+        "dark scroll-smooth antialiased",
+        fontMono.variable,
+        "font-sans",
+        geist.variable,
+      )}
     >
       <body className="bg-[#050505] text-white">
         {children}

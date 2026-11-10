@@ -18,13 +18,6 @@ import {
 import { authClient } from "@/lib/auth-client"
 import { showToast } from "@/lib/toast"
 
-const navLinks = [
-  { label: "Browse Jobs", href: "#jobs" },
-  { label: "Companies", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Blog", href: "#cta" },
-]
-
 /** Session theke asha user er minimum info */
 type HeaderUser = {
   name?: string | null
@@ -61,6 +54,13 @@ function UserAvatar({ user, className = "size-9" }: { user: HeaderUser; classNam
     </span>
   )
 }
+// cosutom navLinks
+// এগুলো সব পেজে একই থাকে
+const baseNavLinks = [
+  { label: "Browse Jobs", href: "#jobs" },
+  { label: "Companies", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
+]
 
 /**
  * 🔵 ACCOUNT MENU (choto dropdown)
@@ -154,6 +154,13 @@ export function SiteHeader() {
   // isPending = true mane data ekhono ashe ni (loading).
   const { data: session, isPending } = authClient.useSession()
   const user = session?.user
+
+  // role অনুযায়ী Dashboard link: seeker / recruiter / admin
+  const role = user?.role ?? "seeker"
+  const navLinks = [
+    ...baseNavLinks,
+    { label: "Dashboard", href: `/dashboard/${role}` },
+  ]
 
   /** Logout function (header + mobile menu duitai use kore) */
   async function handleSignOut() {

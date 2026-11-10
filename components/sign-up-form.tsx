@@ -9,11 +9,9 @@ import {
   Briefcase,
   Eye,
   EyeOff,
-  Image as ImageIcon,
   Lock,
   Mail,
   ShieldCheck,
-  Upload,
   UserRound,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -21,14 +19,13 @@ import { FaGithub, FaGoogle } from "react-icons/fa6"
 
 import { AuthField } from "@/components/auth-field"
 import { authClient } from "@/lib/auth-client"
-import { compressImage } from "@/lib/image"
 import { showToast } from "@/lib/toast"
 
 // ------------------------------------------------------------------
-// 🎭 USER ROLE
+// 🎭 ইউজারের রোল
 // ------------------------------------------------------------------
-// Signup er somoy user ei tin ta option theke ekta select korbe.
-// `type UserRole` server er lib/auth.ts er role field er sathe milte hobe.
+// 💡 হিন্ট: নিচের ৩টা value অবশ্যই lib/auth.ts এর role type এর সাথে
+//    হুবহু মিলতে হবে। নতুন রোল যোগ করলে দুই জায়গায় যোগ করতে হবে।
 type UserRole = "seeker" | "recruiter" | "admin"
 
 const roleOptions: {
@@ -57,15 +54,12 @@ const roleOptions: {
     },
   ]
 
-// Password koto strong, seta check korar rules
+// পাসওয়ার্ড কতটা শক্ত, সেটা চেক করার নিয়ম
 const passwordRules = [
   { label: "At least 8 characters", test: (value: string) => value.length >= 8 },
   { label: "One uppercase letter", test: (value: string) => /[A-Z]/.test(value) },
   { label: "One number", test: (value: string) => /\d/.test(value) },
 ]
-
-// Profile picture er maximum size: 5MB
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 export function SignUpForm() {
   const router = useRouter()
@@ -73,15 +67,8 @@ export function SignUpForm() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
 
-  // 🎭 Role state: default holo "seeker"
+  // 🎭 role state: ডিফল্ট হলো "seeker"
   const [role, setRole] = useState<UserRole>("seeker")
-
-  // 🖼️ Image state
-  // imageMode = "url"  -> user image link paste korbe
-  // imageMode = "file" -> user nijer computer theke chobi upload korbe
-  const [imageMode, setImageMode] = useState<"url" | "file">("url")
-  const [avatar, setAvatar] = useState("")
-  const [isReadingImage, setIsReadingImage] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
@@ -89,51 +76,11 @@ export function SignUpForm() {
   const passedRules = passwordRules.filter((rule) => rule.test(password)).length
   const selectedRole = roleOptions.find((option) => option.value === role) ?? roleOptions[0]
 
-  // Image mode paltole purono preview clean kore dei
-  function handleImageModeChange(nextMode: "url" | "file") {
-    setImageMode(nextMode)
-    setAvatar("")
-  }
-
-  // User file select korle: check kori -> choto kori -> preview state e rakhi
-  async function handleImageFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const input = event.target
-    const file = input.files?.[0]
-
-    if (!file) return
-
-    // File ta really image kina check
-    if (!file.type.startsWith("image/")) {
-      showToast.error("Please choose an image file.")
-      return
-    }
-
-    // 5MB er cheye boro hole bondho kori
-    if (file.size > MAX_IMAGE_SIZE) {
-      showToast.error("Image must be 5MB or smaller.")
-      return
-    }
-
-    try {
-      setIsReadingImage(true)
-
-      // lib/image.ts er helper: chobi 512px e choto kore data URL banay
-      setAvatar(await compressImage(file))
-      showToast.success("Photo selected.")
-    } catch (error) {
-      console.error("Image processing failed:", error)
-      showToast.error("Could not read this image. Please try another one.")
-    } finally {
-      setIsReadingImage(false)
-      // Ek e chobi abar select korleo onChange jeno kaj kore
-      input.value = ""
-    }
-  }
-
   /**
-   * 🧾 ACCOUNT CREATE
+   * 🧾 অ্যাকাউন্ট তৈরি
    * ------------------------------------------------------------------
-   * Form theke name/email/password nisi, ar role + image state theke nisi.
+   * ফর্ম থেকে নাম / ইমেইল / পাসওয়ার্ড নিচ্ছি,
+   * আর role নিচ্ছি React state থেকে।
    */
   async function handleSignUp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -149,15 +96,14 @@ export function SignUpForm() {
     }
 
     try {
-      const { error } = await authClient.signUp.email({
+      const { data , error } = await authClient.signUp.email({
         name: user.name,
         email: user.email,
         password: user.password,
-        // Image na dile undefined pathai, jate database e empty string na jay
-        image: avatar.trim() || undefined,
-        // 🎭 User je role select koreche, seta server e pathai
+        // 🎭 ইউজার যে role সিলেক্ট করেছে, সেটা সার্ভারে পাঠাচ্ছি
         role,
       })
+      console.log("User ar SignUp data ",data)
 
       if (error) {
         setErrorMessage(error.message || "Could not create your account.")
@@ -165,9 +111,11 @@ export function SignUpForm() {
         return
       }
 
-      // ✅ Account create + auto login sokol hoye geche
-      showToast.success("Account created! Welcome to HireLoop.")
-      router.push("/")
+      // ✅ অ্যাকাউন্ট তৈরি + অটো লগইন হয়ে গেছে।
+      // 🎯 এখন ইউজারকে সরাসরি প্রোফাইল পেজে পাঠাচ্ছি,
+      //    যাতে সে নিজের details, cover image আর profile image দিতে পারে।
+      showToast.success("Account created! Now complete your profile.")
+      router.push("/profile")
       router.refresh()
     } catch (error) {
       console.error("Sign up error:", error)
@@ -178,18 +126,19 @@ export function SignUpForm() {
     }
   }
 
-  // 🌐 GOOGLE / GITHUB SIGN UP
+  // 🌐 গুগল / গিটহাব দিয়ে সাইন আপ
+  // সাইন আপ শেষে ইউজারকেও প্রোফাইল পেজে পাঠানো হচ্ছে।
   const handleGoogleSignIn = async () => {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: "/profile",
     })
   }
 
   const handleGithubSignIn = async () => {
     await authClient.signIn.social({
       provider: "github",
-      callbackURL: "/",
+      callbackURL: "/profile",
     })
   }
 
@@ -206,7 +155,7 @@ export function SignUpForm() {
           </p>
         </div>
 
-        {/* Social buttons */}
+        {/* সোশ্যাল বাটন */}
         <div className="mt-7 grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -234,7 +183,7 @@ export function SignUpForm() {
           <span className="h-px flex-1 bg-white/10" />
         </p>
 
-        {/* Error box */}
+        {/* এরর বক্স */}
         {errorMessage && (
           <div className="mb-5 flex items-start gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3.5 py-3 text-xs text-rose-200">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -244,87 +193,7 @@ export function SignUpForm() {
 
         <form className="space-y-5" onSubmit={handleSignUp}>
           {/* ---------------------------------------------------------- */}
-          {/* 🖼️ PROFILE PHOTO: URL diye ba file upload diye                */}
-          {/* ---------------------------------------------------------- */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-4">
-              <div
-                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] bg-cover bg-center text-white/40"
-                style={avatar ? { backgroundImage: `url("${avatar}")` } : undefined}
-              >
-                {!avatar && <UserRound className="size-6" />}
-              </div>
-
-              <div className="flex-1 space-y-2">
-                {/* Image source choose: URL or File */}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleImageModeChange("url")}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs transition ${imageMode === "url"
-                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
-                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
-                      }`}
-                  >
-                    Image URL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleImageModeChange("file")}
-                    className={`flex-1 rounded-lg border px-3 py-1.5 text-xs transition ${imageMode === "file"
-                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
-                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
-                      }`}
-                  >
-                    Upload file
-                  </button>
-                </div>
-
-                {imageMode === "url" ? (
-                  <AuthField
-                    id="image"
-                    label="Profile Photo URL"
-                    icon={ImageIcon}
-                    type="url"
-                    placeholder="https://example.com/avatar.jpg"
-                    value={avatar}
-                    onChange={(event) => setAvatar(event.target.value)}
-                  />
-                ) : (
-                  <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.08]">
-                    <Upload className="size-4" />
-                    {isReadingImage
-                      ? "Reading image..."
-                      : avatar
-                        ? "Change photo"
-                        : "Choose photo"}
-
-                    {/* Real file input ta hide kora, label e click korle input open hobe */}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageFile}
-                      disabled={isReadingImage}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-
-            {avatar && (
-              <button
-                type="button"
-                onClick={() => setAvatar("")}
-                className="text-xs text-white/35 transition hover:text-rose-300"
-              >
-                Remove photo
-              </button>
-            )}
-          </div>
-
-          {/* ---------------------------------------------------------- */}
-          {/* 🎭 ROLE SELECT                                                */}
+          {/* 🎭 রোল সিলেক্ট */}
           {/* ---------------------------------------------------------- */}
           <div className="space-y-2">
             <span className="block text-sm font-medium text-white/80">I am a</span>
@@ -402,7 +271,7 @@ export function SignUpForm() {
               }
             />
 
-            {/* Password strength bar */}
+            {/* পাসওয়ার্ডের শক্তি বোঝার বার */}
             <div className="grid grid-cols-3 gap-1.5 pt-1">
               {passwordRules.map((rule, index) => (
                 <span
@@ -455,7 +324,7 @@ export function SignUpForm() {
 
           <button
             type="submit"
-            disabled={loading || isReadingImage}
+            disabled={loading}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-medium text-white shadow-[0_0_35px_-12px_rgba(139,92,246,1)] transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Creating account..." : "Create account"}

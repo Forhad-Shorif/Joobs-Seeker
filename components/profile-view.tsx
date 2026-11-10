@@ -23,10 +23,12 @@ import {
   Camera,
   ChevronRight,
   ImagePlus,
+  Link2,
   Loader2,
   LogOut,
   Mail,
   Save,
+  Upload,
   UserRound,
 } from "lucide-react"
 
@@ -55,30 +57,44 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
   const router = useRouter()
 
+  // ------------------------------------------------------------------
+  // 🔐 ইউজারের ইমেইল
+  // ------------------------------------------------------------------
+  // 💡 হিন্ট: সার্ভার পেজ (app/profile/page.tsx) আগেই session চেক করে
+  //    initialUser পাঠিয়ে দেয়। তাই এখানে আবার client-side session
+  //    fetch করার দরকার নেই — এতে extra request আর console error দুটোই কমে।
+  const userEmail = initialUser.email
+
   // ---------- অ্যাকাউন্ট: নাম + ছবি ----------
   // avatar = প্রিভিউ ছবি (data URL), isSavingAccount = সেভ চলছে কি না
   const [name, setName] = useState(initialUser.name)
   const [avatar, setAvatar] = useState(initialUser.image)
   const [isSavingAccount, setIsSavingAccount] = useState(false)
 
+  // 🖼️ ছবির উৎস: "url" = লিংক পেস্ট, "file" = কম্পিউটার থেকে আপলোড
+  // আগের ছবি base64 (data URL) হলে file mode দেখাই, নাহলে url mode
+  const [imageMode, setImageMode] = useState<"url" | "file">(
+    initialUser.image.startsWith("data:") ? "file" : "url",
+  )
+
   // ---------- ডান দিকের ফর্মের ডেটা ----------
   const [details, setDetails] = useState<ProfileDetails>({
     ...emptyProfileDetails,
   })
 
-  // পেজ খুললে email দিয়ে আগের সেভ করা ডিটেইলস লোড করে
+  // পেজ খুললে user-এর email দিয়ে আগের সেভ করা ডিটেইলস লোড করে
   // (আসল ডেটা আসে lib/profile-details.ts থেকে)
   useEffect(() => {
     let cancelled = false
 
-    loadProfileDetails(initialUser.email).then((saved) => {
+    loadProfileDetails(userEmail).then((saved) => {
       if (!cancelled) setDetails(saved)
     })
 
     return () => {
       cancelled = true
     }
-  }, [initialUser.email])
+  }, [userEmail])
 
   // কতগুলো ফিল্ড পূরণ হয়েছে → তার উপর ভিত্তি করে প্রোফাইল স্ট্রেংথ %
   const completeness = useMemo(() => {
@@ -97,7 +113,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     return Math.round((checks.filter(Boolean).length / checks.length) * 100)
   }, [name, avatar, details])
 
-  // ছবি না থাকলে নামের প্রথম অক্ষর (fallback "U") দেখায়
+  // ছবি না থাকলে নামের প্রথম অক্ষর (ফলব্যাক "U") দেখায়
   const initial = name.trim().charAt(0).toUpperCase() || "U"
 
   // লগআউট করে হোম পেজে পাঠায় (lib/auth-client.ts দিয়ে)
@@ -113,7 +129,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     }
   }
 
-  // ছবি বাছাই: image কিনা + ৫MB সীমা চেক → lib/image.ts দিয়ে ছোট প্রিভিউ বানায়
+  // ছবি বাছাই: ছবি কিনা + ৫MB সীমা চেক → lib/image.ts দিয়ে ছোট প্রিভিউ বানায়
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const file = input.files?.[0]
@@ -131,6 +147,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
       }
 
       setAvatar(await compressImage(file))
+      setImageMode("file")
       showToast.success("Photo selected. Click Save changes to apply.")
     } catch (error) {
       console.error("Image processing failed:", error)
@@ -172,7 +189,9 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     }
   }
 
-  // নাম + ছবি সেভ করে (better-auth এর updateUser কল)
+  // 👤 নাম + ছবি আপডেট
+  // 💡 হিন্ট: বাম দিকের নাম আর ছবি সরাসরি Better Auth-এর updateUser-এ যাবে।
+  //    এগুলো /api/profile-details backend-এ যায় না।
   async function handleSaveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -184,8 +203,12 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     setIsSavingAccount(true)
 
     try {
-      const payload: { name: string; image?: string } = { name: name.trim() }
-      if (avatar) payload.image = avatar
+      // Better Auth-এর user record-এ নাম ও ছবি আপডেট হচ্ছে
+      const payload: { name: string; image: string } = {
+        name: name.trim(),
+        // খালি string পাঠালে আগের ছবি মুছে যাবে
+        image: avatar,
+      }
 
       const { error } = await authClient.updateUser(payload)
 
@@ -209,7 +232,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
-        {/* হোম > My profile ব্রেডক্রাম্ব */}
+        {/* হোম > আমার প্রোফাইল ব্রেডক্রাম্ব */}
         <div className="mb-6 flex items-center gap-1.5 text-xs text-white/40">
           <Link href="/" className="transition hover:text-white">
             Home
@@ -273,6 +296,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                   {/* ক্যামেরা আইকনে ক্লিক করলে ফাইল পিকার খোলে */}
                   <label
                     htmlFor="profile-photo"
+                    onClick={() => setImageMode("file")}
                     className="absolute -right-1 -bottom-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-[#0a0a0c] bg-violet-600 text-white shadow-lg transition hover:bg-violet-500"
                   >
                     <Camera className="size-4" />
@@ -294,7 +318,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
 
                   <p className="mt-2 flex items-center gap-1.5 truncate text-xs text-white/40">
                     <Mail className="size-3.5 shrink-0" />
-                    {initialUser.email}
+                    {userEmail}
                   </p>
                 </div>
               </div>
@@ -363,39 +387,94 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
             </p>
 
             <form onSubmit={handleSaveAccount} className="mt-6 space-y-5">
-              {/* ছবির প্রিভিউ + Change বাটন */}
-              <div className="flex items-center gap-4">
-                <div className="size-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500 to-blue-500">
-                  {avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatar}
-                      alt="Profile photo preview"
-                      className="size-full object-cover"
+              {/* ছবির প্রিভিউ + উৎস বাছাই (URL / File) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <div className="size-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500 to-blue-500">
+                    {avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={avatar}
+                        alt="Profile photo preview"
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex size-full items-center justify-center text-lg font-semibold">
+                        {initial}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white/80">Profile photo</p>
+                    <p className="mt-0.5 text-[11px] text-white/35">
+                      Paste an image URL or upload a file. Max 5MB.
+                    </p>
+                  </div>
+                </div>
+
+                {/* ছবির উৎস: URL অথবা ফাইল (সাইনআপ পেজের মতো) */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setImageMode("url")}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
+                      imageMode === "url"
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
+                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                    }`}
+                  >
+                    <Link2 className="size-3.5" />
+                    Image URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageMode("file")}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
+                      imageMode === "file"
+                        ? "border-violet-400/60 bg-violet-500/15 text-violet-200"
+                        : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white"
+                    }`}
+                  >
+                    <Upload className="size-3.5" />
+                    Upload file
+                  </button>
+                </div>
+
+                {imageMode === "url" ? (
+                  <Field id="profile-image-url" label="Profile photo URL">
+                    {/* 💡 হিন্ট: আগের ছবি base64 (data:) হলে ইনপুটে দেখানো হয় না,
+                        কারণ base64 লেখা অনেক বড়। ইউজার চাইলে নতুন URL বসাতে পারে। */}
+                    <input
+                      id="profile-image-url"
+                      type="url"
+                      value={avatar.startsWith("data:") ? "" : avatar}
+                      onChange={(event) => setAvatar(event.target.value)}
+                      placeholder="https://example.com/avatar.jpg"
+                      className={inputClass}
                     />
-                  ) : (
-                    <span className="flex size-full items-center justify-center text-lg font-semibold">
-                      {initial}
-                    </span>
-                  )}
-                </div>
+                  </Field>
+                ) : (
+                  <label
+                    htmlFor="profile-photo"
+                    className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.08]"
+                  >
+                    <Upload className="size-4" />
+                    {avatar ? "Change photo" : "Choose photo"}
+                  </label>
+                )}
 
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-white/80">
-                    Profile photo
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-white/35">
-                    JPG, PNG or WebP. Max 5MB.
-                  </p>
-                </div>
-
-                <label
-                  htmlFor="profile-photo"
-                  className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white/80 transition hover:border-violet-400/40 hover:bg-white/10 hover:text-white"
-                >
-                  <Camera className="size-3.5" />
-                  Change
-                </label>
+                {avatar && (
+                  // 💡 হিন্ট: «Remove» চাপলে প্রিভিউ খালি হয়। «Save changes» চাপলে
+                  //    খালি string পাঠানোর কারণে ডাটাবেস থেকেও ছবি মুছে যাবে।
+                  <button
+                    type="button"
+                    onClick={() => setAvatar("")}
+                    className="text-xs text-white/35 transition hover:text-rose-300"
+                  >
+                    Remove photo
+                  </button>
+                )}
               </div>
 
               {/* কভার ছবির ফিল্ড — বাছাই করলেই সাথে সাথে সেভ হয়ে যায় */}
@@ -477,7 +556,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
 
           {/* ---------- ডান দিকের ফর্ম (আলাদা ফাইল: Profileform.tsx) ---------- */}
           <ProfileForm
-            email={initialUser.email}
+            email={userEmail}
             details={details}
             onDetailsChange={setDetails}
           />

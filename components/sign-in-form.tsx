@@ -22,13 +22,13 @@ const SignPage = () => {
       email: string;
       password: string;
     };
-    console.log(user)
+    console.log("Login User Information",user)
 
     const { data, error } = await authClient.signIn.email({
       ...user,
       callbackURL: "/"
     });
-    console.log(data)
+    console.log("User data",data)
 
     setLoading(false);  
 
