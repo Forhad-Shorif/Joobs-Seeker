@@ -18,7 +18,12 @@ export type ProfileDetails = {
   status: string
   phone: string
   city: string
+  dateOfBirth: string
+  gender: string
+  nationality: string
+  nationalId: string
   homeAddress: string
+  permanentAddress: string
   personalDetails: string
   coverImage: string
 }
@@ -31,7 +36,12 @@ export const emptyProfileDetails: ProfileDetails = {
   status: "Open to work",
   phone: "",
   city: "",
+  dateOfBirth: "",
+  gender: "",
+  nationality: "",
+  nationalId: "",
   homeAddress: "",
+  permanentAddress: "",
   personalDetails: "",
   coverImage: "",
 }
@@ -82,6 +92,7 @@ export async function saveProfileDetails(
 
   // এখন ডেমো হিসেবে ব্রাউজারে সেভ হচ্ছে
   window.localStorage.setItem(storageKey(email), JSON.stringify(details))
+  console.log(email,details,"User Profile ar email and details")
 }
 
 /**

@@ -3,8 +3,8 @@
 /**
  * 📄 ফাইল: components/Profileform.tsx
  * কাজ: প্রোফাইল পেজের ডান পাশের ফর্ম।
- * ইউজার এখানে নিজের ক্যারিয়ার ডিটেইলস দেয় → জব ম্যাচিং + রিক্রুটার যোগাযোগ।
- * সেভ হয় lib/profile-details.ts দিয়ে, আর backend-এ যায় ইউজারের email।
+ * ইউজার এখানে নিজের ক্যারিয়ার ও পার্সোনাল ডিটেইলস দেয় → জব ম্যাচিং + অ্যাকাউন্ট রেকর্ড।
+ * আপাতত সেভ হয় localStorage-এ; backend-এ পাঠানোর নিয়ম handleSave-এ comment করা আছে।
  */
 
 import {
@@ -16,14 +16,18 @@ import {
 } from "react"
 import {
   Briefcase,
+  CalendarDays,
   Check,
   ChevronDown,
+  CreditCard,
   FileText,
-  Home,
+  Flag,
+  IdCard,
   Loader2,
   MapPin,
   Phone,
   Plus,
+  ShieldCheck,
   Sparkles,
   X,
   Zap,
@@ -43,13 +47,33 @@ const EXPERIENCE_OPTIONS = [
   "5+ years",
 ]
 
+// প্রফেশনাল স্ট্যাটাস — গ্রুপ করে দেখানো হয়েছে, যাতে ড্রপডাউন পরিষ্কার থাকে
 const STATUS_OPTIONS = [
-  "Open to work",
-  "Employed",
-  "Freelancing",
-  "Student",
-  "Looking for internship",
+  {
+    group: "Job search",
+    items: ["Open to work", "Actively looking for jobs", "Open to opportunities"],
+  },
+  {
+    group: "Currently working",
+    items: ["Employed", "Employed — open to offers", "On notice period"],
+  },
+  {
+    group: "Independent",
+    items: ["Freelancing", "Available for freelance", "Contract / Consulting"],
+  },
+  {
+    group: "Study & other",
+    items: [
+      "Student",
+      "Looking for internship",
+      "Career break",
+      "Relocating",
+      "Not looking right now",
+    ],
+  },
 ]
+
+const GENDER_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"]
 
 // সব ইনপুটের কমন Tailwind ক্লাস — বারবার একই ডিজাইন না লিখলেও চলে
 export const inputClass =
@@ -110,6 +134,9 @@ function IconInput({
   )
 }
 
+/** ড্রপডাউনে সাধারণ অপশন অথবা গ্রুপ করা অপশন — দুটোই সাপোর্ট করে */
+type SelectOption = string | { group: string; items: string[] }
+
 /** কাস্টম অ্যারোসহ স্টাইল করা ড্রপডাউন */
 function SelectField({
   id,
@@ -118,16 +145,18 @@ function SelectField({
   onChange,
   options,
   placeholder,
+  hint,
 }: {
   id: string
   label: string
   value: string
   onChange: (value: string) => void
-  options: string[]
+  options: SelectOption[]
   placeholder?: string
+  hint?: string
 }) {
   return (
-    <Field id={id} label={label}>
+    <Field id={id} label={label} hint={hint}>
       <div className="relative">
         <select
           id={id}
@@ -140,11 +169,21 @@ function SelectField({
               {placeholder}
             </option>
           )}
-          {options.map((option) => (
-            <option key={option} value={option} className="bg-[#0b0b0e]">
-              {option}
-            </option>
-          ))}
+          {options.map((option) =>
+            typeof option === "string" ? (
+              <option key={option} value={option} className="bg-[#0b0b0e]">
+                {option}
+              </option>
+            ) : (
+              <optgroup key={option.group} label={option.group}>
+                {option.items.map((item) => (
+                  <option key={item} value={item} className="bg-[#0b0b0e]">
+                    {item}
+                  </option>
+                ))}
+              </optgroup>
+            )
+          )}
         </select>
         <ChevronDown className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-white/40" />
       </div>
@@ -245,7 +284,7 @@ export function ProfileForm({
       const valuesToSave: ProfileDetails = { ...details, skills }
 
       // ----------------------------------------------------------------
-      // 🔐 সেশন → ইউজার → ব্যাকএন্ড (ধাপে ধাপে)
+      // 🔐 সেশন → ইউজার → data
       // ----------------------------------------------------------------
       // ১. ব্রাউজার থেকে নতুন session নাও।
       //    (সাইনআপ/লগইনের সময় cookie save হয়, তাই এখানে user পাওয়া যায়)
@@ -261,10 +300,25 @@ export function ProfileForm({
       // 💡 হিন্ট: session না পেলে আগের prop email-টাই ফলব্যাক হিসেবে ব্যবহার করি
       const userEmail = user?.email ?? email
 
-      // ⚠️ আগে ফর্মের ডেটা browser-এর localStorage-এ রাখা হতো।
-      //    এখন এখান থেকেই backend-এ যাচ্ছে (lib/profile-details.ts দেখো)।
-      // ৩. user.email + ফর্মের details একসাথে ব্যাকএন্ডে পাঠাও।
-      //    saveProfileDetails ভিতরে POST /api/profile-details এ fetch করে।
+      // ৩. আপাতত সব data console-এ দেখানো হচ্ছে, যাতে তুমি check করতে পারো.
+      console.log("Profile details:", {
+        email: userEmail,
+        details: valuesToSave,
+      })
+
+      // ৪. Backend-এ পাঠাতে চাইলে নিচের comment করা অংশটা ব্যবহার করবে.
+      //    (এখন saveProfileDetails শুধু browser-এর localStorage-এ রাখছে.)
+      //
+      // await fetch("/api/profile-details", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({
+      //     email: userEmail,
+      //     details: valuesToSave,
+      //   }),
+      // })
+
+      // ৫. এই মুহূর্তে email + details browser-এর localStorage-এ রাখা হচ্ছে.
       await saveProfileDetails(userEmail, valuesToSave)
 
       onDetailsChange(valuesToSave)
@@ -311,7 +365,7 @@ export function ProfileForm({
           <FormSection
             icon={Briefcase}
             title="Career"
-            description="Tell recruiters what you do and what you are looking for."
+            description="Tell recruiters what you do and your current availability."
           >
             <Field id="headline" label="Professional headline">
               <input
@@ -332,6 +386,7 @@ export function ProfileForm({
                 value={details.status}
                 onChange={(status) => updateDetails({ status })}
                 options={STATUS_OPTIONS}
+                hint="Shown on your profile as an availability badge."
               />
               <SelectField
                 id="experience"
@@ -341,6 +396,17 @@ export function ProfileForm({
                 options={EXPERIENCE_OPTIONS}
                 placeholder="Select experience"
               />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5">
+              <span className="flex items-center gap-1.5 text-[11px] text-white/35">
+                <Sparkles className="size-3.5 text-violet-300" />
+                Profile badge
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                <span className="size-1.5 rounded-full bg-emerald-400" />
+                {details.status || "Open to work"}
+              </span>
             </div>
           </FormSection>
 
@@ -402,7 +468,95 @@ export function ProfileForm({
             </Field>
           </FormSection>
 
-          {/* কন্টাক্ট সেকশন: ফোন, শহর, বাড়ির ঠিকানা */}
+          {/* পার্সোনাল ডিটেইলস: অ্যাকাউন্ট রেকর্ডে ইউজারের নিজস্ব তথ্য */}
+          <FormSection
+            icon={IdCard}
+            title="Personal details"
+            description="Private information stored with your account for the HireLoop admin team."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="dateOfBirth" label="Date of birth">
+                <IconInput
+                  id="dateOfBirth"
+                  icon={CalendarDays}
+                  type="date"
+                  value={details.dateOfBirth}
+                  onChange={(dateOfBirth) => updateDetails({ dateOfBirth })}
+                  autoComplete="bday"
+                />
+              </Field>
+
+              <SelectField
+                id="gender"
+                label="Gender"
+                value={details.gender}
+                onChange={(gender) => updateDetails({ gender })}
+                options={GENDER_OPTIONS}
+                placeholder="Select gender"
+              />
+
+              <Field id="nationality" label="Nationality">
+                <IconInput
+                  id="nationality"
+                  icon={Flag}
+                  value={details.nationality}
+                  onChange={(nationality) => updateDetails({ nationality })}
+                  placeholder="Bangladeshi"
+                  autoComplete="country-name"
+                />
+              </Field>
+
+              <Field id="nationalId" label="National ID (optional)">
+                <IconInput
+                  id="nationalId"
+                  icon={CreditCard}
+                  value={details.nationalId}
+                  onChange={(nationalId) => updateDetails({ nationalId })}
+                  placeholder="1234 5678 9012"
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="homeAddress" label="Present address">
+                <textarea
+                  id="homeAddress"
+                  value={details.homeAddress}
+                  onChange={(event) =>
+                    updateDetails({ homeAddress: event.target.value })
+                  }
+                  rows={3}
+                  placeholder="House, road, area, city..."
+                  autoComplete="street-address"
+                  className={textareaClass}
+                />
+              </Field>
+
+              <Field id="permanentAddress" label="Permanent address">
+                <textarea
+                  id="permanentAddress"
+                  value={details.permanentAddress}
+                  onChange={(event) =>
+                    updateDetails({ permanentAddress: event.target.value })
+                  }
+                  rows={3}
+                  placeholder="Village, post office, district..."
+                  autoComplete="street-address"
+                  className={textareaClass}
+                />
+              </Field>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3.5 py-3">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+              <p className="text-[11px] leading-relaxed text-white/45">
+                These details stay in your account record and can be reviewed by
+                the HireLoop admin team for verification and support.
+              </p>
+            </div>
+          </FormSection>
+
+          {/* কন্টাক্ট সেকশন: ফোন ও শহর */}
           <FormSection
             icon={MapPin}
             title="Contact"
@@ -432,17 +586,6 @@ export function ProfileForm({
                 />
               </Field>
             </div>
-
-            <Field id="homeAddress" label="Home address">
-              <IconInput
-                id="homeAddress"
-                icon={Home}
-                value={details.homeAddress}
-                onChange={(homeAddress) => updateDetails({ homeAddress })}
-                placeholder="House, road, area..."
-                autoComplete="street-address"
-              />
-            </Field>
           </FormSection>
 
           {/* অ্যাবাউট সেকশন: নিজের সম্পর্কে ৬০০ অক্ষরের লেখা */}
@@ -453,7 +596,7 @@ export function ProfileForm({
           >
             <Field
               id="personalDetails"
-              label="Personal details"
+              label="Short bio"
               hint={`${details.personalDetails.length}/600 characters`}
             >
               <textarea

@@ -127,6 +127,21 @@
     @apply font-sans;
     color-scheme: dark;
     }
+
+  /* Native select dropdown-কে dark theme-এ রাখে, যাতে option সাদা না হয়ে যায়. */
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #0e0e0e;
+    color: #f4f4f5;
+  }
+
+  select optgroup {
+    background-color: #0e0e0e;
+    color: #a1a1aa;
+  }
 }
 
 ::selection {
