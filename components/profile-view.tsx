@@ -2,53 +2,57 @@
 
 /**
  * 📄 ফাইল: components/profile-view.tsx
- * কাজ: প্রোফাইল পেজের পুরো UI (client side)।
- *  - উপরে হিরো: ছবি, নাম, ইমেইল, স্ট্যাটাস
- *  - বাম কার্ড: নাম + ছবি আপডেট
- *  - ডান ফর্ম: components/Profileform.tsx
- * সার্ভার পেজ app/profile/page.tsx থেকে name/email/image আসে।
+ * কাজ: প্রোফাইল পেজের UI (client side)।
+ *
+ * Design goal:
+ * - Hero-টা ছোট ও premium look
+ * - Account form-টা compact, যাতে page বেশি লম্বা না হয়
+ * - AddInfo dropdown + desktop-এ একটা সুন্দর CTA card
+ *
+ * 💡 এখন এখানে কোনো GET/cards নেই।
+ *    পরে তুমি backend থেকে user data GET করে cards বানাবে।
  */
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react"
+import { useState, type ChangeEvent, type FormEvent } from "react"
 import {
   BadgeCheck,
   Camera,
+  ChevronDown,
   ChevronRight,
+  FileText,
   ImagePlus,
   Link2,
   Loader2,
   LogOut,
   Mail,
+  Plus,
   Save,
+  Sparkles,
   Upload,
   UserRound,
 } from "lucide-react"
 
-import { Field, ProfileForm, inputClass } from "@/components/Profileform"
+import { Field, inputClass } from "@/components/Profileform"
 import { SiteHeader } from "@/components/site-header"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { uploadImageToCloudinary } from "@/lib/actions/upload-image"
 import { authClient } from "@/lib/auth-client"
 import { compressImage } from "@/lib/image"
-import {
-  emptyProfileDetails,
-  loadProfileDetails,
-  saveProfileCover,
-  type ProfileDetails,
-} from "@/lib/profile-details"
 import { showToast } from "@/lib/toast"
 
-/** সার্ভার পেজ (app/profile/page.tsx) থেকে আসা ইউজারের তথ্য */
+/** সার্ভার পেজ (app/(auth)/profile/page.tsx) থেকে আসা ইউজারের তথ্য */
 export type ProfileUser = {
   name: string
   email: string
   image: string
+  coverImage: string
 }
 
 // প্রোফাইল ছবির সর্বোচ্চ সাইজ ৫MB
@@ -60,63 +64,34 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
   // ------------------------------------------------------------------
   // 🔐 ইউজারের ইমেইল
   // ------------------------------------------------------------------
-  // 💡 হিন্ট: সার্ভার পেজ (app/profile/page.tsx) আগেই session চেক করে
-  //    initialUser পাঠিয়ে দেয়। তাই এখানে আবার client-side session
-  //    fetch করার দরকার নেই — এতে extra request আর console error দুটোই কমে।
+  // 💡 সার্ভার পেজ আগেই session চেক করে initialUser পাঠিয়ে দেয়।
+  //    তাই এখানে আবার client-side session fetch করার দরকার নেই।
   const userEmail = initialUser.email
 
   // ---------- অ্যাকাউন্ট: নাম + ছবি ----------
-  // avatar = প্রিভিউ ছবি (data URL), isSavingAccount = সেভ চলছে কি না
+  // avatar = ছবির preview (file হলে data URL, না হলে normal URL)
+  // cover  = cover image-এর ছোট URL (Cloudinary থেকে আসে)
   const [name, setName] = useState(initialUser.name)
   const [avatar, setAvatar] = useState(initialUser.image)
+  const [cover, setCover] = useState(initialUser.coverImage)
   const [isSavingAccount, setIsSavingAccount] = useState(false)
 
   // 🖼️ ছবির উৎস: "url" = লিংক পেস্ট, "file" = কম্পিউটার থেকে আপলোড
-  // আগের ছবি base64 (data URL) হলে file mode দেখাই, নাহলে url mode
   const [imageMode, setImageMode] = useState<"url" | "file">(
     initialUser.image.startsWith("data:") ? "file" : "url",
   )
 
-  // ---------- ডান দিকের ফর্মের ডেটা ----------
-  const [details, setDetails] = useState<ProfileDetails>({
-    ...emptyProfileDetails,
-  })
-
-  // পেজ খুললে user-এর email দিয়ে আগের সেভ করা ডিটেইলস লোড করে
-  // (আসল ডেটা আসে lib/profile-details.ts থেকে)
-  useEffect(() => {
-    let cancelled = false
-
-    loadProfileDetails(userEmail).then((saved) => {
-      if (!cancelled) setDetails(saved)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [userEmail])
-
-  // কতগুলো ফিল্ড পূরণ হয়েছে → তার উপর ভিত্তি করে প্রোফাইল স্ট্রেংথ %
-  const completeness = useMemo(() => {
-    const checks = [
-      Boolean(name.trim()),
-      Boolean(avatar),
-      Boolean(details.headline.trim()),
-      details.skills.length > 0,
-      Boolean(details.experience),
-      Boolean(details.phone.trim()),
-      Boolean(details.city.trim()),
-      Boolean(details.homeAddress.trim()),
-      Boolean(details.personalDetails.trim()),
-    ]
-
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100)
-  }, [name, avatar, details])
-
-  // ছবি না থাকলে নামের প্রথম অক্ষর (ফলব্যাক "U") দেখায়
+  // ছবি না থাকলে নামের প্রথম অক্ষর দেখায়
   const initial = name.trim().charAt(0).toUpperCase() || "U"
 
-  // লগআউট করে হোম পেজে পাঠায় (lib/auth-client.ts দিয়ে)
+  // ⚠️ এখনো GET implement করা হয়নি, তাই user-এর AddInfo data নেই।
+  //    পরে GET করে data পেলে এখানে চেক করবে:
+  //    const hasAddInfo = Boolean(details.headline || details.skills.length)
+  //    - true  → user-এর information দেখাবে
+  //    - false → নিচের AddInfo CTA দেখাবে
+  const hasAddInfo = false
+
+  // লগআউট করে হোম পেজে পাঠায়
   async function handleSignOut() {
     try {
       await authClient.signOut()
@@ -129,7 +104,8 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     }
   }
 
-  // ছবি বাছাই: ছবি কিনা + ৫MB সীমা চেক → lib/image.ts দিয়ে ছোট প্রিভিউ বানায়
+  // ছবি বাছাই: এখানে শুধু preview বানানো হচ্ছে।
+  // Save changes চাপলে handleSaveAccount ছবিটা Cloudinary-তে upload করবে।
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const file = input.files?.[0]
@@ -158,7 +134,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     }
   }
 
-  // কভার ছবি বাছাই: চেক করে ছোট করে → email দিয়ে সাথে সাথে সেভ করে
+  // কভার ছবি বাছাই: ছোট করি → Cloudinary-তে upload → URL MongoDB-তে save
   async function handleCoverChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const file = input.files?.[0]
@@ -175,11 +151,22 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
         return
       }
 
-      // কভার বড় জায়গায় দেখায়, তাই 1280px পর্যন্ত রাখি
-      const coverImage = await compressImage(file, 1280, 0.82)
-      await saveProfileCover(initialUser.email, coverImage)
+      // 1) কভার বড় জায়গায় দেখায়, তাই 1280px WebP data URL বানাই
+      const coverDataUrl = await compressImage(file, 1280, 0.82)
 
-      setDetails((current) => ({ ...current, coverImage }))
+      // 2) Cloudinary-তে upload করে ছোট URL নিই
+      const coverUrl = await uploadImageToCloudinary(coverDataUrl)
+
+      // 3) Better Auth user-এর coverImage field-এ শুধু URL save করি
+      //    (base64 নয় — তাই MongoDB-তে বড় string যাবে না)
+      const { error } = await authClient.updateUser({ coverImage: coverUrl })
+
+      if (error) {
+        showToast.error(error.message || "Could not update the cover image.")
+        return
+      }
+
+      setCover(coverUrl)
       showToast.success("Cover image updated!")
     } catch (error) {
       console.error("Cover image update failed:", error)
@@ -189,9 +176,9 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     }
   }
 
-  // 👤 নাম + ছবি আপডেট
-  // 💡 হিন্ট: বাম দিকের নাম আর ছবি সরাসরি Better Auth-এর updateUser-এ যাবে।
-  //    এগুলো /api/profile-details backend-এ যায় না।
+  // 👤 নাম + প্রোফাইল ছবি আপডেট
+  // 💡 image file হলে আগে Cloudinary-তে upload হবে,
+  //    তারপর Better Auth-এর updateUser-এ শুধু ছোট URL যাবে।
   async function handleSaveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -203,20 +190,27 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     setIsSavingAccount(true)
 
     try {
-      // Better Auth-এর user record-এ নাম ও ছবি আপডেট হচ্ছে
-      const payload: { name: string; image: string } = {
-        name: name.trim(),
-        // খালি string পাঠালে আগের ছবি মুছে যাবে
-        image: avatar,
+      // 1) Avatar যদি data URL (file) হয় → Cloudinary-তে upload
+      //    যদি আগে থেকেই URL হয় → সেটাই ব্যবহার করি
+      let imageUrl = avatar.trim()
+
+      if (imageUrl.startsWith("data:")) {
+        imageUrl = await uploadImageToCloudinary(imageUrl)
       }
 
-      const { error } = await authClient.updateUser(payload)
+      // 2) Better Auth user record-এ নাম + ছোট image URL save
+      //    খালি string পাঠালে আগের ছবি মুছে যাবে
+      const { error } = await authClient.updateUser({
+        name: name.trim(),
+        image: imageUrl,
+      })
 
       if (error) {
         showToast.error(error.message || "Could not update your profile.")
         return
       }
 
+      setAvatar(imageUrl)
       showToast.success("Profile updated!")
       router.refresh()
     } catch (error) {
@@ -231,24 +225,57 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
     <div className="min-h-svh bg-[#050505] text-white">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
-        {/* হোম > আমার প্রোফাইল ব্রেডক্রাম্ব */}
-        <div className="mb-6 flex items-center gap-1.5 text-xs text-white/40">
-          <Link href="/" className="transition hover:text-white">
-            Home
-          </Link>
-          <ChevronRight className="size-3" />
-          <span className="text-white/70">My profile</span>
+      <main className="relative mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+        {/* নিচের দিকের হালকা violet/blue glow — premium feel-এর জন্য */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-80 overflow-hidden"
+        >
+          <div className="absolute -top-40 left-1/4 size-96 rounded-full bg-violet-600/15 blur-[120px]" />
+          <div className="absolute -top-32 right-10 size-72 rounded-full bg-blue-500/10 blur-[100px]" />
         </div>
 
-        {/* ================= হিরো: কভার + অ্যাভাটার + নাম ================= */}
-        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02]">
-          {/* কভার: ইউজার ছবি দিলে সেটা, না দিলে গ্রেডিয়েন্ট */}
-          <div className="relative h-36 overflow-hidden bg-[#0d0d11] sm:h-48">
-            {details.coverImage ? (
+        {/* হোম > আমার প্রোফাইল + AddInfo dropdown */}
+        <div className="relative mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-white/40">
+            <Link href="/" className="transition hover:text-white">
+              Home
+            </Link>
+            <ChevronRight className="size-3" />
+            <span className="text-white/70">My profile</span>
+          </div>
+
+          {/* shadcn-style dropdown:
+              AddInfo click → menu open → Profile form click → form page */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-200">
+              <Plus className="size-3.5" />
+              AddInfo
+              <ChevronDown className="size-3.5" />
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              align="end"
+              className="w-44 border border-white/10 bg-[#0b0b0e] text-white"
+            >
+              <DropdownMenuItem
+                onClick={() => router.push("/profile/add-info")}
+                className="cursor-pointer focus:bg-violet-500/15 focus:text-violet-200"
+              >
+                <FileText className="size-4" />
+                Profile form
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* ================= হিরো: ছোট, clean, premium ================= */}
+        <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.025] shadow-[0_30px_80px_-45px_rgba(139,92,246,0.45)]">
+          <div className="relative h-28 overflow-hidden bg-[#0d0d11] sm:h-36">
+            {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={details.coverImage}
+                src={cover}
                 alt="Profile cover"
                 className="size-full object-cover"
               />
@@ -259,25 +286,23 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                   aria-hidden
                   className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.07)_1px,transparent_1px)] [mask-image:linear-gradient(to_bottom,black,transparent)] [background-size:42px_42px]"
                 />
-                <div className="absolute -top-28 right-8 size-72 rounded-full bg-violet-600/30 blur-[100px]" />
+                <div className="absolute -top-24 right-10 size-64 rounded-full bg-violet-600/30 blur-[90px]" />
               </>
             )}
 
-            {/* কভার বদলানোর বাটন — ফাইল ইনপুটটা নিচে অ্যাকাউন্ট কার্ডে আছে */}
             <label
               htmlFor="profile-cover"
-              className="absolute top-3 right-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/70 sm:top-4 sm:right-4"
+              className="absolute top-3 right-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/20 bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/70"
             >
               <ImagePlus className="size-3.5" />
               Change cover
             </label>
           </div>
 
-          <div className="px-5 pb-6 sm:px-8 sm:pb-8">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-              {/* অ্যাভাটার + নাম + ইমেইল */}
+          <div className="relative px-5 pb-5 sm:px-7 sm:pb-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-end gap-4">
-                <div className="relative -mt-14 sm:-mt-16">
+                <div className="relative -mt-12 sm:-mt-14">
                   <div className="size-24 overflow-hidden rounded-3xl border-4 border-[#0a0a0c] bg-gradient-to-br from-violet-500 to-blue-500 shadow-2xl shadow-black/60 sm:size-28">
                     {avatar ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -293,7 +318,6 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                     )}
                   </div>
 
-                  {/* ক্যামেরা আইকনে ক্লিক করলে ফাইল পিকার খোলে */}
                   <label
                     htmlFor="profile-photo"
                     onClick={() => setImageMode("file")}
@@ -312,22 +336,17 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                     <BadgeCheck className="size-5 shrink-0 text-violet-400" />
                   </div>
 
-                  <p className="mt-1 truncate text-sm text-white/45">
-                    {details.headline || "Add a headline to stand out"}
-                  </p>
-
-                  <p className="mt-2 flex items-center gap-1.5 truncate text-xs text-white/40">
+                  <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-white/40">
                     <Mail className="size-3.5 shrink-0" />
                     {userEmail}
                   </p>
                 </div>
               </div>
 
-              {/* স্ট্যাটাস ব্যাজ + লগআউট বাটন */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
                   <span className="size-1.5 rounded-full bg-emerald-400" />
-                  {details.status || "Open to work"}
+                  Open to work
                 </span>
 
                 <button
@@ -340,57 +359,26 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 </button>
               </div>
             </div>
-
-            {/* প্রোফাইল কত % পূরণ হয়েছে → প্রোগ্রেস বার */}
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-white/70">
-                  Profile strength
-                </span>
-                <span className="font-semibold text-violet-300">
-                  {completeness}%
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-400 transition-all duration-500"
-                  style={{ width: `${completeness}%` }}
-                />
-              </div>
-              <p className="mt-2 text-[11px] text-white/35">
-                Complete your details to get better job matches.
-              </p>
-            </div>
           </div>
         </section>
 
-        {/* ================= দুই কলামের বডি ================= */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:items-start">
-          {/* ---------- বাম কার্ড: নাম + ছবি আপডেট ---------- */}
+        {/* ================= বডি: account উপরে, AddInfo নিচে ================= */}
+        <div className="relative mt-5 space-y-5">
           <section
             id="account"
-            className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-7 lg:sticky lg:top-24"
+            className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6"
           >
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/50 to-transparent"
-            />
-
             <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-violet-300/80 uppercase">
               <UserRound className="size-4" />
               Account
             </div>
+            <h2 className="mt-2 text-lg font-semibold">Personal information</h2>
 
-            <h2 className="mt-3 text-lg font-semibold">Personal information</h2>
-            <p className="mt-1 text-sm text-white/45">
-              Update your name, photo and cover image.
-            </p>
-
-            <form onSubmit={handleSaveAccount} className="mt-6 space-y-5">
-              {/* ছবির প্রিভিউ + উৎস বাছাই (URL / File) */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <div className="size-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500 to-blue-500">
+            <form onSubmit={handleSaveAccount} className="mt-5 space-y-4">
+              {/* প্রোফাইল ছবি + নাম — এক লাইনে, যাতে form ছোট হয় */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-3 sm:w-52">
+                  <div className="size-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500 to-blue-500">
                     {avatar ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -405,15 +393,33 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-white/80">Profile photo</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white/80">
+                      Profile photo
+                    </p>
                     <p className="mt-0.5 text-[11px] text-white/35">
-                      Paste an image URL or upload a file. Max 5MB.
+                      Max 5MB
                     </p>
                   </div>
                 </div>
 
-                {/* ছবির উৎস: URL অথবা ফাইল (সাইনআপ পেজের মতো) */}
+                <div className="flex-1">
+                  <Field id="profile-name" label="Full name">
+                    <input
+                      id="profile-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="Your full name"
+                      autoComplete="name"
+                      className={inputClass}
+                      required
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {/* ছবির উৎস: URL অথবা ফাইল */}
+              <div className="space-y-2">
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -443,8 +449,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
 
                 {imageMode === "url" ? (
                   <Field id="profile-image-url" label="Profile photo URL">
-                    {/* 💡 হিন্ট: আগের ছবি base64 (data:) হলে ইনপুটে দেখানো হয় না,
-                        কারণ base64 লেখা অনেক বড়। ইউজার চাইলে নতুন URL বসাতে পারে। */}
+                    {/* base64 হলে ইনপুটে দেখানো হয় না, কারণ লেখা অনেক বড় */}
                     <input
                       id="profile-image-url"
                       type="url"
@@ -457,7 +462,7 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 ) : (
                   <label
                     htmlFor="profile-photo"
-                    className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.08]"
+                    className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.08]"
                   >
                     <Upload className="size-4" />
                     {avatar ? "Change photo" : "Choose photo"}
@@ -465,8 +470,6 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 )}
 
                 {avatar && (
-                  // 💡 হিন্ট: «Remove» চাপলে প্রিভিউ খালি হয়। «Save changes» চাপলে
-                  //    খালি string পাঠানোর কারণে ডাটাবেস থেকেও ছবি মুছে যাবে।
                   <button
                     type="button"
                     onClick={() => setAvatar("")}
@@ -477,39 +480,42 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 )}
               </div>
 
-              {/* কভার ছবির ফিল্ড — বাছাই করলেই সাথে সাথে সেভ হয়ে যায় */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-white/80">Cover image</p>
-                <div className="flex items-center gap-3">
-                  <div className="h-14 flex-1 overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(120deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2),rgba(5,5,5,0))]">
-                    {details.coverImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={details.coverImage}
-                        alt="Cover preview"
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex size-full items-center justify-center text-[11px] text-white/40">
-                        No cover yet
-                      </span>
-                    )}
-                  </div>
-
-                  <label
-                    htmlFor="profile-cover"
-                    className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white/80 transition hover:border-violet-400/40 hover:bg-white/10 hover:text-white"
-                  >
-                    <ImagePlus className="size-3.5" />
-                    Choose
-                  </label>
+              {/* কভার image — compact row */}
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="h-12 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(120deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2),rgba(5,5,5,0))]">
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={cover}
+                      alt="Cover preview"
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-[10px] text-white/40">
+                      No cover
+                    </span>
+                  )}
                 </div>
-                <p className="text-[11px] text-white/35">
-                  16:9 recommended, max 5MB. Saves automatically.
-                </p>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white/80">
+                    Cover image
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-white/35">
+                    16:9 recommended, max 5MB
+                  </p>
+                </div>
+
+                <label
+                  htmlFor="profile-cover"
+                  className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white/80 transition hover:border-violet-400/40 hover:bg-white/10 hover:text-white"
+                >
+                  <ImagePlus className="size-3.5" />
+                  Choose
+                </label>
               </div>
 
-              {/* লুকানো ফাইল ইনপুট — দুই জায়গার "Change" লেবেল এটাই খোলে */}
+              {/* লুকানো ফাইল ইনপুট */}
               <input
                 id="profile-photo"
                 type="file"
@@ -517,8 +523,6 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 onChange={handleAvatarChange}
                 className="sr-only"
               />
-
-              {/* কভার ছবির লুকানো ইনপুট — হিরোর "Change cover" আর কার্ডের "Choose" এটাই খোলে */}
               <input
                 id="profile-cover"
                 type="file"
@@ -527,39 +531,80 @@ export function ProfileView({ initialUser }: { initialUser: ProfileUser }) {
                 className="sr-only"
               />
 
-              <Field id="profile-name" label="Full name">
-                <input
-                  id="profile-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Your full name"
-                  autoComplete="name"
-                  className={inputClass}
-                  required
-                />
-              </Field>
-
-              <button
-                type="submit"
-                disabled={isSavingAccount}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-medium text-white shadow-[0_0_35px_-14px_rgba(139,92,246,1)] transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSavingAccount ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Save className="size-4" />
-                )}
-                {isSavingAccount ? "Saving..." : "Save changes"}
-              </button>
+              <div className="flex flex-col gap-3 border-t border-white/5 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] text-white/30">
+                  Files are uploaded and saved as small URLs.
+                </p>
+                <button
+                  type="submit"
+                  disabled={isSavingAccount}
+                  className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-medium text-white shadow-[0_0_35px_-14px_rgba(139,92,246,1)] transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  {isSavingAccount ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  {isSavingAccount ? "Saving..." : "Save changes"}
+                </button>
+              </div>
             </form>
           </section>
 
-          {/* ---------- ডান দিকের ফর্ম (আলাদা ফাইল: Profileform.tsx) ---------- */}
-          <ProfileForm
-            email={userEmail}
-            details={details}
-            onDetailsChange={setDetails}
-          />
+          {/* ================= AddInfo: condition অনুযায়ী info অথবা CTA ================= */}
+          {hasAddInfo ? (
+            // ✅ user AddInfo করে থাকলে (পরে GET করলে) এখানে তার information দেখাবে
+            <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-violet-300/80 uppercase">
+                <Sparkles className="size-4" />
+                AddInfo
+              </div>
+              <h2 className="mt-2 text-lg font-semibold">Your profile details</h2>
+
+              {/* 💡 TODO: পরে GET করা details এখানে cards আকারে বসাও */}
+              <p className="mt-2 text-sm text-white/45">
+                Your saved profile details will appear here.
+              </p>
+            </section>
+          ) : (
+            // ❌ এখনো AddInfo data নেই → শুধু AddInfo CTA দেখাচ্ছি
+            <section className="relative overflow-hidden rounded-3xl border border-violet-400/20 bg-gradient-to-r from-violet-600/20 via-violet-500/5 to-blue-500/10 p-5 sm:p-6">
+              <div
+                aria-hidden
+                className="absolute -top-20 right-8 size-48 rounded-full bg-violet-500/20 blur-3xl"
+              />
+
+              <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-violet-300/25 bg-violet-500/15 text-violet-200">
+                    <FileText className="size-5" />
+                  </div>
+
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold">Add your info</h2>
+                      <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-violet-200 uppercase">
+                        AddInfo
+                      </span>
+                    </div>
+                    <p className="mt-1 max-w-2xl text-sm text-white/50">
+                      Add your headline, skills, experience and personal
+                      details. Your saved details will appear here.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/profile/add-info")}
+                  className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-medium text-white shadow-[0_0_35px_-14px_rgba(139,92,246,1)] transition hover:bg-violet-500"
+                >
+                  <Plus className="size-4" />
+                  Open profile form
+                </button>
+              </div>
+            </section>
+          )}
         </div>
       </main>
     </div>

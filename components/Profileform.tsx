@@ -4,7 +4,7 @@
  * 📄 ফাইল: components/Profileform.tsx
  * কাজ: প্রোফাইল পেজের ডান পাশের ফর্ম।
  * ইউজার এখানে নিজের ক্যারিয়ার ও পার্সোনাল ডিটেইলস দেয় → জব ম্যাচিং + অ্যাকাউন্ট রেকর্ড।
- * আপাতত সেভ হয় localStorage-এ; backend-এ পাঠানোর নিয়ম handleSave-এ comment করা আছে।
+ * Save করলে lib/actions/userinfo.tsx (server action) দিয়ে backend-এ যায়।
  */
 
 import {
@@ -34,8 +34,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { authClient } from "@/lib/auth-client"
-import { saveProfileDetails, type ProfileDetails } from "@/lib/profile-details"
+import { saveUserInfo } from "@/lib/actions/userinfo"
+import type { ProfileDetails } from "@/lib/user-info"
 import { showToast } from "@/lib/toast"
 
 // ড্রপডাউনের অপশন — বদলাতে চাইলে শুধু এই দুই অ্যারে এডিট করো
@@ -222,10 +222,10 @@ function FormSection({
 }
 
 /**
- * মূল ফর্ম (parent: components/profile-view.tsx)।
- * - email → session না পাওয়া গেলে fallback হিসেবে ব্যবহার হয়
- * - details → ফর্মের সব ডেটা (অভিভাবক ProfileView-তে রাখা)
- * - onDetailsChange → ডেটা বদলালে ProfileView-কে জানানো হয়
+ * মূল AddInfo form (parent: components/profile-form-page.tsx)।
+ * - email → backend-এ data পাঠানোর সময় ব্যবহার হয়
+ * - details → ফর্মের সব ডেটা (parent page-এ রাখা)
+ * - onDetailsChange → ডেটা বদলালে parent page-কে জানানো হয়
  */
 export function ProfileForm({
   email,
@@ -283,43 +283,8 @@ export function ProfileForm({
           : details.skills
       const valuesToSave: ProfileDetails = { ...details, skills }
 
-      // ----------------------------------------------------------------
-      // 🔐 সেশন → ইউজার → data
-      // ----------------------------------------------------------------
-      // ১. ব্রাউজার থেকে নতুন session নাও।
-      //    (সাইনআপ/লগইনের সময় cookie save হয়, তাই এখানে user পাওয়া যায়)
-      const { data: session, error } = await authClient.getSession()
-
-      // ২. session থেকে ইউজার বের করো
-      const user = session?.user
-
-      if (error) {
-        console.error("Could not load session:", error)
-      }
-
-      // 💡 হিন্ট: session না পেলে আগের prop email-টাই ফলব্যাক হিসেবে ব্যবহার করি
-      const userEmail = user?.email ?? email
-
-      // ৩. আপাতত সব data console-এ দেখানো হচ্ছে, যাতে তুমি check করতে পারো.
-      console.log("Profile details:", {
-        email: userEmail,
-        details: valuesToSave,
-      })
-
-      // ৪. Backend-এ পাঠাতে চাইলে নিচের comment করা অংশটা ব্যবহার করবে.
-      //    (এখন saveProfileDetails শুধু browser-এর localStorage-এ রাখছে.)
-      //
-      // await fetch("/api/profile-details", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({
-      //     email: userEmail,
-      //     details: valuesToSave,
-      //   }),
-      // })
-
-      // ৫. এই মুহূর্তে email + details browser-এর localStorage-এ রাখা হচ্ছে.
-      await saveProfileDetails(userEmail, valuesToSave)
+      // email + সব details server action দিয়ে backend-এ যাচ্ছে.
+      await saveUserInfo(email, valuesToSave)
 
       onDetailsChange(valuesToSave)
       setSkillInput("")

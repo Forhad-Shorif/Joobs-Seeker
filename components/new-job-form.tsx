@@ -22,6 +22,8 @@ import {
   Users,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { showToast } from "@/lib/toast"
+import type { Job } from "@/lib/job"
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-white/10 pl-10 pr-3.5 text-sm text-white transition outline-none placeholder:text-white/25 hover:border-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/10"
@@ -162,15 +164,8 @@ export function NewJobForm() {
     const formData = new FormData(event.currentTarget)
     const text = (key: string) => String(formData.get(key) ?? "").trim()
 
-    // Textarea-র প্রতিটা লাইন আলাদা item বানায়.
-    const lines = (key: string) =>
-      text(key)
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-
-    // এখানে form-এর সব data একটা পরিষ্কার object-এ রাখা হচ্ছে.
-    const job = {
+    // 💡 `Job` type দেওয়ায় field বাদ পড়লে বা ভুল হলে TypeScript ধরবে.
+    const job: Job = {
       title: text("title"),
       company: text("company"),
       location: text("location"),
@@ -186,36 +181,27 @@ export function NewJobForm() {
       experience: text("experience"),
       deadline: text("deadline"),
       description: text("description"),
-      responsibilities: lines("responsibilities"),
-      requirements: lines("requirements"),
-      skills: text("skills")
-        .split(",")
-        .map((skill) => skill.trim())
-        .filter(Boolean),
+      responsibilities: text("responsibilities"),
+      requirements: text("requirements"),
+      skills: text("skills"),
       contactEmail: text("contactEmail"),
       website: text("website"),
     }
 
-    // এখন শুধু console-এ দেখানো হচ্ছে. পরে এখানেই backend API call বসবে.
-    console.log("New job:", job)
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+    const response = await fetch(`${backendUrl}/PostJobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(job),
+    })
 
-    // -----------------------------------------------------------------
-    // Backend-এ job পাঠাতে চাইলে উপরের console.log-এর নিচে এভাবে লিখবেন:
-    //
-    // const response = await fetch("/api/jobs", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify(job),
-    // })
-    //
-    // if (!response.ok) {
-    //   console.error("Job save failed:", response.status)
-    //   return
-    // }
-    //
-    // const savedJob = await response.json()
-    // console.log("Saved job:", savedJob)
-    // -----------------------------------------------------------------
+    if (!response.ok) {
+      console.error("Job save failed:", response.status)
+      showToast.error(`Job save failed: ${response.status}`)
+      return
+    }
+         console.log(response)
+    showToast.success("Job posted successfully")
 
     // Success message দেখানোর জন্য.
     setSubmitted(true)
@@ -338,17 +324,17 @@ export function NewJobForm() {
               rows={5}
               required
             />
-            <TextareaField
+            <InputField
               label="Responsibilities"
               name="responsibilities"
-              placeholder={"Build and maintain user interfaces\nCollaborate with designers and backend engineers"}
-              hint="Write one responsibility per line."
+              icon={FileText}
+              placeholder="Build and maintain user interfaces"
             />
-            <TextareaField
+            <InputField
               label="Requirements"
               name="requirements"
-              placeholder={"3+ years of experience with React\nStrong understanding of TypeScript"}
-              hint="Write one requirement per line."
+              icon={CheckCircle2}
+              placeholder="3+ years of experience with React"
             />
             <InputField
               label="Skills"

@@ -27,6 +27,8 @@ export default async function ProfilePage() {
     redirect("/sign-in?redirect=/profile")
   }
 
+  // 💡 হিন্ট: এখন এখানে কোনো GET নেই।
+  // ইউজার-ডেটা পরে তুমি নিজে GET করে cards বানাবে।
   // client component-এ শুধু দরকারি তথ্য পাঠায় (id নয়, email-ই যথেষ্ট)
   return (
     <ProfileView
@@ -34,6 +36,8 @@ export default async function ProfilePage() {
         name: session.user.name || "",
         email: session.user.email,
         image: session.user.image || "",
+        // Cover image Better Auth user record থেকে আসছে (ছোট URL)
+        coverImage: session.user.coverImage || "",
       }}
     />
   )
