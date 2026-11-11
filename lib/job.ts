@@ -21,6 +21,7 @@ export type Job = {
   category: string
   jobType: string
   workplace: string
+  email: string
   salary: JobSalary
   experience: string
   deadline: string
@@ -30,4 +31,9 @@ export type Job = {
   skills: string
   contactEmail: string
   website: string
+}
+
+// Backend থেকে আসা job-এ MongoDB-র `_id`-ও থাকে।
+export type PostedJob = Job & {
+  _id: string
 }

@@ -24,6 +24,7 @@ import {
 import type { LucideIcon } from "lucide-react"
 import { showToast } from "@/lib/toast"
 import type { Job } from "@/lib/job"
+import { authClient } from "@/lib/auth-client"
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-white/10 pl-10 pr-3.5 text-sm text-white transition outline-none placeholder:text-white/25 hover:border-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/10"
@@ -155,10 +156,19 @@ export function NewJobForm() {
   // Form submit হলে success message দেখানোর জন্য ছোট একটা state.
   const [submitted, setSubmitted] = useState(false)
 
+  // 💡 Hook component-এর body-তে থাকবে, event handler-এর ভিতরে না।
+  const { data: session } = authClient.useSession()
+
   // এই function-টাই form-এর main logic.
   // async দেওয়া আছে, যাতে পরে backend-এ await fetch() ব্যবহার করা যায়.
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault() // page reload বন্ধ করে.
+
+    const email = session?.user?.email
+    if (!email) {
+      showToast.error("Please sign in to post a job.")
+      return
+    }
 
     // FormData সব input-এর value একসাথে নাম দিয়ে নিয়ে আসে.
     const formData = new FormData(event.currentTarget)
@@ -172,6 +182,7 @@ export function NewJobForm() {
       category: text("category"),
       jobType: text("jobType"),
       workplace: text("workplace"),
+      email,
       salary: {
         min: text("salaryMin"),
         max: text("salaryMax"),
@@ -200,7 +211,7 @@ export function NewJobForm() {
       showToast.error(`Job save failed: ${response.status}`)
       return
     }
-         console.log(response)
+    console.log(response)
     showToast.success("Job posted successfully")
 
     // Success message দেখানোর জন্য.
