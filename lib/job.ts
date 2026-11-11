@@ -15,6 +15,7 @@ export type JobSalary = {
 }
 
 export type Job = {
+  _id: string
   title: string
   company: string
   location: string
@@ -36,4 +37,43 @@ export type Job = {
 // Backend থেকে আসা job-এ MongoDB-র `_id`-ও থাকে।
 export type PostedJob = Job & {
   _id: string
+}
+
+// ---------- GET /jobs API types ----------
+
+// backend response-এর pagination অংশ
+export type JobPagination = {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+// GET /jobs-এর response — backend standard shape
+export type JobsResponse = {
+  success: boolean
+  result: PostedJob[]
+  totalJobs: number
+  currentPage: number
+  totalPages: number
+}
+
+// browse-jobs page যে query params পাঠাতে পারে
+// sort hint: "latest" (default) | "oldest"
+export type JobFilters = {
+  search?: string
+  category?: string
+  jobType?: string
+  workplace?: string
+  experience?: string
+  location?: string
+  company?: string
+  skills?: string
+  currency?: string
+  period?: string
+  minSalary?: string
+  maxSalary?: string
+  sort?: "latest" | "oldest"
+  page?: string
+  limit?: string
 }

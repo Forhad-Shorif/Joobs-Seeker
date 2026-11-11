@@ -34,7 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { saveUserInfo } from "@/lib/actions/userinfo"
+import { saveUserInfo } from "@/lib/SheareAction/ProfileAction/userinfo"
 import type { ProfileDetails } from "@/lib/user-info"
 import { showToast } from "@/lib/toast"
 

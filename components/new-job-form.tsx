@@ -1,8 +1,14 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import type { FormEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react"
+import { useRouter } from "next/navigation"
+import type {
+  FormEvent,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react"
 import {
   BriefcaseBusiness,
   Building2,
@@ -25,6 +31,7 @@ import type { LucideIcon } from "lucide-react"
 import { showToast } from "@/lib/toast"
 import type { Job } from "@/lib/job"
 import { authClient } from "@/lib/auth-client"
+import { JobsPost } from "@/lib/SheareAction/RecruiterAction/Action"
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-white/10 pl-10 pr-3.5 text-sm text-white transition outline-none placeholder:text-white/25 hover:border-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/10"
@@ -32,7 +39,15 @@ const fieldClass =
 const inputClass = `${fieldClass} bg-white/[0.04]`
 const selectClass = `${fieldClass} bg-[#0e0e0e]`
 
-const categories = ["Engineering", "Design", "Product", "Marketing", "Sales", "Finance", "Support"]
+const categories = [
+  "Engineering",
+  "Design",
+  "Product",
+  "Marketing",
+  "Sales",
+  "Finance",
+  "Support",
+]
 const jobTypes = ["Full-time", "Part-time", "Contract", "Internship"]
 const workplaces = ["On-site", "Hybrid", "Remote"]
 const currencies = ["USD", "EUR", "GBP", "BDT"]
@@ -55,14 +70,18 @@ type FieldProps = {
 function Field({ label, icon: Icon, hint, children }: FieldProps) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-white/75">{label}</span>
+      <span className="mb-2 block text-sm font-medium text-white/75">
+        {label}
+      </span>
 
       <span className="relative block">
         <Icon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-white/30" />
         {children}
       </span>
 
-      {hint && <span className="mt-1.5 block text-[11px] text-white/30">{hint}</span>}
+      {hint && (
+        <span className="mt-1.5 block text-[11px] text-white/30">{hint}</span>
+      )}
     </label>
   )
 }
@@ -73,7 +92,13 @@ type InputFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   hint?: string
 }
 
-function InputField({ label, icon, hint, className = "", ...props }: InputFieldProps) {
+function InputField({
+  label,
+  icon,
+  hint,
+  className = "",
+  ...props
+}: InputFieldProps) {
   return (
     <Field label={label} icon={icon} hint={hint}>
       <input className={`${inputClass} ${className}`} {...props} />
@@ -87,7 +112,13 @@ type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
   options: string[]
 }
 
-function SelectField({ label, icon, options, className = "", ...props }: SelectFieldProps) {
+function SelectField({
+  label,
+  icon,
+  options,
+  className = "",
+  ...props
+}: SelectFieldProps) {
   return (
     <Field label={label} icon={icon}>
       <select
@@ -95,7 +126,11 @@ function SelectField({ label, icon, options, className = "", ...props }: SelectF
         {...props}
       >
         {options.map((option) => (
-          <option key={option} value={option} className="bg-[#0e0e0e] text-white">
+          <option
+            key={option}
+            value={option}
+            className="bg-[#0e0e0e] text-white"
+          >
             {option}
           </option>
         ))}
@@ -110,16 +145,25 @@ type TextareaFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   hint?: string
 }
 
-function TextareaField({ label, hint, className = "", ...props }: TextareaFieldProps) {
+function TextareaField({
+  label,
+  hint,
+  className = "",
+  ...props
+}: TextareaFieldProps) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-white/75">{label}</span>
+      <span className="mb-2 block text-sm font-medium text-white/75">
+        {label}
+      </span>
       <textarea
         rows={4}
         className={`w-full resize-y rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-white transition outline-none placeholder:text-white/25 hover:border-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/10 ${className}`}
         {...props}
       />
-      {hint && <span className="mt-1.5 block text-[11px] text-white/30">{hint}</span>}
+      {hint && (
+        <span className="mt-1.5 block text-[11px] text-white/30">{hint}</span>
+      )}
     </label>
   )
 }
@@ -153,8 +197,7 @@ function Section({
 }
 
 export function NewJobForm() {
-  // Form submit হলে success message দেখানোর জন্য ছোট একটা state.
-  const [submitted, setSubmitted] = useState(false)
+  const router = useRouter()
 
   // 💡 Hook component-এর body-তে থাকবে, event handler-এর ভিতরে না।
   const { data: session } = authClient.useSession()
@@ -197,25 +240,29 @@ export function NewJobForm() {
       skills: text("skills"),
       contactEmail: text("contactEmail"),
       website: text("website"),
+      _id: ""
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-    const response = await fetch(`${backendUrl}/PostJobs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(job),
-    })
+    // const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
-    if (!response.ok) {
-      console.error("Job save failed:", response.status)
-      showToast.error(`Job save failed: ${response.status}`)
-      return
+    try {
+      // const response = await fetch(`${backendUrl}/PostJobs`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify(job),
+      // })
+      await JobsPost(job)
+
+      showToast.success("Job posted successfully")
+
+      // list page-এ নিয়ে যাই → নতুন job সাথে সাথে দেখা যাবে
+      router.push("/dashboard/recruiter/jobs")
+    } catch (error) {
+      console.error("Job save failed:", error)
+      showToast.error(
+        error instanceof Error ? error.message : "Could not save job."
+      )
     }
-    console.log(response)
-    showToast.success("Job posted successfully")
-
-    // Success message দেখানোর জন্য.
-    setSubmitted(true)
   }
 
   return (
@@ -251,11 +298,23 @@ export function NewJobForm() {
               placeholder="New York, USA"
               required
             />
-            <SelectField label="Category" name="category" icon={Layers} options={categories} />
-            <SelectField label="Employment type" name="jobType" icon={Clock} options={jobTypes} />
+            <SelectField
+              label="Category"
+              name="category"
+              icon={Layers}
+              options={categories}
+            />
+            <SelectField
+              label="Employment type"
+              name="jobType"
+              icon={Clock}
+              options={jobTypes}
+            />
 
             <div>
-              <span className="mb-2 block text-sm font-medium text-white/75">Workplace</span>
+              <span className="mb-2 block text-sm font-medium text-white/75">
+                Workplace
+              </span>
               <div className="grid grid-cols-3 gap-2">
                 {workplaces.map((workplace) => (
                   <label key={workplace} className="cursor-pointer">
@@ -266,7 +325,7 @@ export function NewJobForm() {
                       defaultChecked={workplace === "Remote"}
                       className="peer sr-only"
                     />
-                    <span className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/50 transition hover:border-white/20 peer-checked:border-violet-400/60 peer-checked:bg-violet-500/15 peer-checked:text-white">
+                    <span className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/50 transition peer-checked:border-violet-400/60 peer-checked:bg-violet-500/15 peer-checked:text-white hover:border-white/20">
                       {workplace}
                     </span>
                   </label>
@@ -298,7 +357,12 @@ export function NewJobForm() {
               min={0}
               placeholder="4000"
             />
-            <SelectField label="Currency" name="currency" icon={Globe} options={currencies} />
+            <SelectField
+              label="Currency"
+              name="currency"
+              icon={Globe}
+              options={currencies}
+            />
             <SelectField
               label="Salary period"
               name="salaryPeriod"
@@ -381,23 +445,10 @@ export function NewJobForm() {
           </div>
         </Section>
 
-        {submitted && (
-          <div
-            role="status"
-            className="flex items-start gap-3 rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4"
-          >
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-300" />
-            <div>
-              <p className="text-sm font-medium text-emerald-200">Job data logged to the console</p>
-              <p className="mt-1 text-xs leading-relaxed text-emerald-200/60">
-                Open DevTools → Console to see the object, then connect this form to your backend.
-              </p>
-            </div>
-          </div>
-        )}
-
         <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-white/30">Nothing is published yet — check the console first.</p>
+          <p className="text-xs text-white/30">
+            Publish করলে job handshake-এর মতো সাথে সাথে list-এ চলে আসবে।
+          </p>
 
           <div className="flex gap-3">
             <Link
@@ -425,7 +476,10 @@ export function NewJobForm() {
           </h2>
           <ul className="mt-4 space-y-3">
             {tips.map((tip) => (
-              <li key={tip} className="flex items-start gap-2.5 text-xs leading-relaxed text-white/50">
+              <li
+                key={tip}
+                className="flex items-start gap-2.5 text-xs leading-relaxed text-white/50"
+              >
                 <span className="mt-1 size-1.5 shrink-0 rounded-full bg-violet-400" />
                 {tip}
               </li>
@@ -448,10 +502,10 @@ export function NewJobForm() {
             Data preview
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/55">
-            On submit, the job object is printed to your browser console.
+            Publish করার সাথে সাথেই job list page-এ দেখা যাবে।
           </p>
           <code className="mt-3 block rounded-lg bg-black/40 p-3 text-[11px] text-violet-200">
-            console.log(&quot;New job:&quot;, job)
+            POST /PostJobs → /dashboard/recruiter/jobs
           </code>
         </div>
       </aside>

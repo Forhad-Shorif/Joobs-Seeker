@@ -4,7 +4,6 @@ import { headers } from "next/headers"
 import PostedJobs from "@/components/PostedJobs"
 import { auth } from "@/lib/auth"
 import type { PostedJob } from "@/lib/job"
-import { showToast } from "@/lib/toast"
 
 export const metadata: Metadata = {
     title: "Manage jobs - HireLoop",
@@ -23,6 +22,9 @@ export const metadata: Metadata = {
 async function getRecruiterJobs(): Promise<PostedJob[]> {
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
+    if (!backendUrl) {
+        return []
+    }
 
     const session = await auth.api.getSession({
         headers: await headers(),
@@ -34,15 +36,32 @@ async function getRecruiterJobs(): Promise<PostedJob[]> {
         return []
     }
 
+    try {
+        const response = await fetch(
+            `${backendUrl}/GetJobs/${encodeURIComponent(email)}`,
+            {
+                // প্রতিবার সরাসরি ব্যাকএন্ড থেকে তাজা ডাটা আনি
+                cache: "no-store",
+            }
+        )
 
-    const response = await fetch(`${backendUrl}/GetJobs/${email}`)
-    const result = await response.json()
-  
-    if (!result) {
-        showToast.error("Fetch Feild")
+        // backend error দিলে (500 + text body) json parse করলে page crash করবে
+        if (!response.ok) {
+            return []
+        }
+
+        const result = await response.json()
+
+        // backend array না দিলে (যেমন { message: ... }) list render ভেঙে যাবে
+        if (!Array.isArray(result)) {
+            return []
+        }
+
+        return result as PostedJob[]
+    } catch (error) {
+        console.error("GetJobs request failed:", error)
+        return []
     }
-    return result
-
 }
 
 export default async function JobsPage() {

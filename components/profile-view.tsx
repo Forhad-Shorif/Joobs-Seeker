@@ -42,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { uploadImageToCloudinary } from "@/lib/actions/upload-image"
+import { uploadImageToCloudinary } from "@/lib/SheareAction/ProfileAction/upload-image"
 import { authClient } from "@/lib/auth-client"
 import { compressImage } from "@/lib/image"
 import { showToast } from "@/lib/toast"

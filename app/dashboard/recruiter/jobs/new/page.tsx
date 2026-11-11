@@ -1,10 +1,4 @@
-// import type { Metadata } from "next"
-
 import { NewJobForm } from "@/components/new-job-form"
-
-// export const metadata: Metadata = {
-//   title: "Post a new job - HireLoop",
-// }
 
 export default function NewJobPage() {
   return (
