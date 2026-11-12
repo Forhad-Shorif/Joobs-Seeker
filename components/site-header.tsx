@@ -57,7 +57,7 @@ function UserAvatar({ user, className = "size-9" }: { user: HeaderUser; classNam
 // cosutom navLinks
 // এগুলো সব পেজে একই থাকে
 const baseNavLinks = [
-  { label: "Browse Jobs", href: "#jobs" },
+  { label: "Browse Jobs", href: "/browse-jobs" },
   { label: "Companies", href: "#features" },
   { label: "Pricing", href: "#pricing" },
 ]

@@ -1,5 +1,4 @@
 import type { Job, JobsResponse } from "@/lib/job"
-import { showToast } from "@/lib/toast"
 
 const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
