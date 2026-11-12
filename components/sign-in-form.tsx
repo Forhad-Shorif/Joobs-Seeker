@@ -4,14 +4,17 @@ import { Button, Description, FieldError, Form, Input, Label, TextField } from "
 import Link from "next/link";
 import React, { useState } from "react";
 import { showToast } from "@/lib/toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { FaGithub } from "react-icons/fa6";
 
 const SignPage = () => {
+
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
 
   const HandleonSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,22 +25,20 @@ const SignPage = () => {
       email: string;
       password: string;
     };
-    console.log("Login User Information",user)
 
     const { data, error } = await authClient.signIn.email({
       ...user,
-      callbackURL: "/"
+      callbackURL: callbackUrl,
     });
-    console.log("User data",data)
 
-    setLoading(false);  
+    setLoading(false);
 
     if (error) {
       showToast.error('Sign-in failed! Please check your credentials.');
       return;
     }
     showToast.success('Successfully signed in!');
-    router.push("/");
+    router.replace(callbackUrl);
     router.refresh();
   };
 
@@ -45,7 +46,7 @@ const SignPage = () => {
   const handleGoogleSignIn = async () => {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: callbackUrl,
     });
   };
 
@@ -53,7 +54,7 @@ const SignPage = () => {
   const handleGithubSignIn = async () => {
     await authClient.signIn.social({
       provider: "github",
-      callbackURL: "/",
+      callbackURL: callbackUrl,
     });
   };
 

@@ -77,3 +77,15 @@ export type JobFilters = {
   page?: string
   limit?: string
 }
+
+// POST /SeekerPost — job save করার সময় backend-এ যে shape যায়।
+export type SaveJob = {
+  title: string
+  location: string
+  workplace: string
+  salary: JobSalary
+  company: string
+  email: string
+  name: string
+  savedAt: Date
+}

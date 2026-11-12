@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import type { JobSalary, PostedJob } from "@/lib/job"
+import SavejobBtn from "@/lib/SheareAction/SeekerAction/SavejobBtn"
 
 /**
  * 📄 components/DetailJob.tsx
@@ -242,12 +243,7 @@ export function DetailJob({ job }: { job: JobDetailsData }) {
               <Bookmark className="size-4" />
             </button>
 
-            <button
-              type="button"
-              className="h-10 rounded-lg bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90"
-            >
-              Save Job
-            </button>
+           <SavejobBtn job = {job}/>
           </div>
         </div>
       </header>
