@@ -2,9 +2,9 @@ import { cache } from "react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
-import { DetailJob, type JobDetailsData } from "@/components/DetailJob"
-import { SiteHeader } from "@/components/site-header"
-import type { JobSalary } from "@/lib/job"
+import { DetailJob, type JobDetailsData } from "@/components/SheareJobs/DetailJob"
+import { SiteHeader } from "@/components/SheareHome/site-header"
+import type { JobSalary } from "@/lib/Type/job"
 
 /**
  * 📄 app/browse-jobs/detailsjobs/[id]/page.tsx

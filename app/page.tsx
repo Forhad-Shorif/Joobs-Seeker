@@ -1,11 +1,11 @@
-import { CtaSection } from "@/components/cta-section"
-import { FeaturesSection } from "@/components/features-section"
-import { Hero } from "@/components/hero"
-import { JobsSection } from "@/components/jobs-section"
-import { PricingSection } from "@/components/pricing-section"
-import { SiteFooter } from "@/components/site-footer"
-import { SiteHeader } from "@/components/site-header"
-import { StatsSection } from "@/components/stats-section"
+import { CtaSection } from "@/components/SheareHome/cta-section"
+import { FeaturesSection } from "@/components/SheareHome/features-section"
+import { Hero } from "@/components/SheareHome/hero"
+import { JobsSection } from "@/components/SheareJobs/jobs-section"
+import { PricingSection } from "@/components/SheareHome/pricing-section"
+import { SiteFooter } from "@/components/SheareHome/site-footer"
+import { SiteHeader } from "@/components/SheareHome/site-header"
+import { StatsSection } from "@/components/SheareHome/stats-section"
 
 export default function Page() {
   return (

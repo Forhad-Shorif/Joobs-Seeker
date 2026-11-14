@@ -27,8 +27,8 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { authClient } from "@/lib/auth-client"
-import { showToast } from "@/lib/toast"
-import { cn } from "@/lib/utils"
+import { showToast } from "@/lib/utils/toast"
+import { cn } from "@/lib/everything/utils"
 
 // ------------------------------------------------------------------
 // 🎭 TYPE
@@ -50,10 +50,11 @@ const ROLES: UserRole[] = ["seeker", "recruiter", "admin"]
 const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     seeker: [
         { label: "Dashboard", href: "/dashboard/seeker", icon: LayoutDashboard },
-        { label: "Find Jobs", href: "/jobs", icon: Search },
-        { label: "Applications", href: "/dashboard/seeker/applications", icon: FileText },
+        { label: "Jobs", href: "/browse-jobs", icon: Search },
         { label: "Saved Jobs", href: "/dashboard/seeker/saved", icon: Bookmark },
-        { label: "Settings", href: "/dashboard/seeker/settings", icon: Settings },
+        { label: "Applications", href: "/dashboard/seeker/application", icon: FileText },
+        { label: "Billing", href: "/payment", icon: CreditCard },
+        { label: "Settings", href: "/dashboard/seeker/setting", icon: Settings },
     ],
 
     recruiter: [
@@ -171,10 +172,10 @@ export function DashboardSidebar() {
 
                     <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-white">
-                            {name}
+                            {role === "seeker" ? "Seeker Portal" : name}
                         </span>
                         <span className="block truncate text-xs text-white/40">
-                            {roleLabel}
+                            {role === "seeker" ? "Professional Tier" : roleLabel}
                         </span>
                     </span>
                 </Link>
@@ -218,8 +219,19 @@ export function DashboardSidebar() {
                 </SidebarMenu>
             </SidebarContent>
 
-            {/* ---------- নিচের অংশ: লগআউট ---------- */}
+            {/* ---------- নিচের অংশ: Post Resume + লগআউট ---------- */}
             <SidebarFooter className="p-3 pb-16">
+                {role === "seeker" && (
+                    <div className="mb-3 border-t border-white/[0.08] pt-4">
+                        <Link
+                            href="/profile/add-info"
+                            className="flex h-11 items-center justify-center rounded-lg bg-white text-sm font-semibold text-black transition hover:bg-white/90"
+                        >
+                            Post Resume
+                        </Link>
+                    </div>
+                )}
+
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton

@@ -1,11 +1,11 @@
 'use client'
-import type { JobDetailsData } from '@/components/DetailJob';
+import type { JobDetailsData } from '@/components/SheareJobs/DetailJob';
 import { authClient } from '../../auth-client';
 import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
-import type { SaveJob } from '../../job';
+import type { SaveJob } from '../../Type/job';
 import { SeekerSaveJobs } from './Action';
-import { showToast } from '../../toast';
+import { showToast } from '../../utils/toast';
 
 type SavejobBtnProps = {
     job: JobDetailsData;
@@ -18,7 +18,7 @@ const SavejobBtn = ({ job }: SavejobBtnProps) => {
     const { data: session } = authClient.useSession();
     const user = session?.user
 
-    const handleSaved = (): void => {
+    const handleSaved = async (): Promise<void> => {
 
         const SaveInfo: SaveJob = {
             title: job.title,
@@ -28,6 +28,7 @@ const SavejobBtn = ({ job }: SavejobBtnProps) => {
             company: job.company,
             email: user?.email ?? "",
             name: user?.name ?? "",
+
             savedAt: new Date()
         };
         // 1. Check authentication
@@ -41,10 +42,12 @@ const SavejobBtn = ({ job }: SavejobBtnProps) => {
         }
         if (user?.role === "seeker") {
             try{
-               const saveJobs = SeekerSaveJobs(SaveInfo)
+               await SeekerSaveJobs(SaveInfo)
               showToast.success("Job Saved successfully")
-              router.push('/browse-jobs')
-            }catch(error){
+              // details page-এই থাকি, যাতে পাশের Apply Now-ও ব্যবহার করা যায়
+              router.refresh()
+            }catch{
+                showToast.error("Could not save job. Please try again.")
                 return
             }
            
@@ -55,7 +58,7 @@ const SavejobBtn = ({ job }: SavejobBtnProps) => {
             <button
                 onClick={handleSaved}
                 type="button"
-                className="h-10 rounded-lg bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90"
+                className="inline-flex h-10 items-center rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 text-sm font-semibold text-white/70 transition hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
             >
                 Save Job
             </button>

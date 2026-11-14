@@ -1,9 +1,9 @@
 import Link from "next/link"
 import { Check } from "lucide-react"
 
-import type { JobFilters } from "@/lib/job"
-import { jobFilterGroups } from "@/lib/job-options"
-import { buildJobHref, hasActiveFilters } from "@/lib/job-url"
+import type { JobFilters } from "@/lib/Type/job"
+import { jobFilterGroups } from "@/lib/everything/job-options"
+import { buildJobHref, hasActiveFilters } from "@/lib/everything/job-url"
 
 /**
  * 📄 components/browse-jobs/filter-sidebar.tsx

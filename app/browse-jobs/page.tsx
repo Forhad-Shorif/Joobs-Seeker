@@ -14,11 +14,11 @@ import {
 
 import { FilterSidebar } from "@/components/browse-jobs/filter-sidebar"
 import {SortSelect } from "@/components/browse-jobs/job-controls"
-import { SiteHeader } from "@/components/site-header"
+import { SiteHeader } from "@/components/SheareHome/site-header"
 import { getJobs } from "@/lib/SheareAction/RecruiterAction/Action"
-import { formatSalary } from "@/lib/format"
-import type { JobFilters, PostedJob } from "@/lib/job"
-import { buildJobHref, hasActiveFilters, parseJobFilters, toJobQuery } from "@/lib/job-url"
+import { formatSalary } from "@/lib/everything/format"
+import type { JobFilters, PostedJob } from "@/lib/Type/job"
+import { buildJobHref, hasActiveFilters, parseJobFilters, toJobQuery } from "@/lib/everything/job-url"
 import { SaveJobButton } from "@/components/browse-jobs/SaveBtn"
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>

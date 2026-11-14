@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { ProfileView } from "@/components/profile-view"
+import { ProfileView } from "@/components/SheareProfile/profile-view"
 import { auth } from "@/lib/auth"
 
 export const metadata: Metadata = {

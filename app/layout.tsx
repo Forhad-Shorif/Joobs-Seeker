@@ -6,7 +6,7 @@ import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 
 import "./globals.css"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/everything/utils"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 

@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { headers } from "next/headers"
 
-import PostedJobs from "@/components/PostedJobs"
+import PostedJobs from "@/components/SheareJobs/PostedJobs"
 import { auth } from "@/lib/auth"
-import type { PostedJob } from "@/lib/job"
+import type { PostedJob } from "@/lib/Type/job"
 
 export const metadata: Metadata = {
     title: "Manage jobs - HireLoop",

@@ -2,7 +2,9 @@ import type { Metadata } from "next"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { ProfileFormPage } from "@/components/profile-form-page"
+import { ProfileFormPage } from "@/components/SheareProfile/profile-form-page"
+import { getUserInfo } from "@/lib/SheareAction/ProfileAction/userinfo"
+import { emptyProfileDetails } from "@/lib/Type/user-info"
 import { auth } from "@/lib/auth"
 
 export const metadata: Metadata = {
@@ -16,8 +18,9 @@ export const metadata: Metadata = {
  *
  * Flow:
  * 1. Server-এ session check করি
- * 2. Client form দেখাই (এখন কোনো GET নেই)
- * 3. Save করলে POST /UserInfo-এ data যাবে
+ * 2. GET /UserInfo/:email দিয়ে আগের saved details আনি
+ * 3. Client form-এ initial data বসাই
+ * 4. Save করলে POST /UserInfo-এ data যাবে
  */
 export default async function AddInfoPage() {
   const requestHeaders = await headers()
@@ -28,5 +31,20 @@ export default async function AddInfoPage() {
     redirect("/sign-in?redirect=/profile/add-info")
   }
 
-  return <ProfileFormPage email={session.user.email} />
+  let initialDetails = emptyProfileDetails
+
+  try {
+    initialDetails =
+      (await getUserInfo(session.user.email)) ?? emptyProfileDetails
+  } catch (error) {
+    // Backend unavailable হলেও form খালি state-এ render হবে
+    console.error("Could not load profile details:", error)
+  }
+
+  return (
+    <ProfileFormPage
+      email={session.user.email}
+      initialDetails={initialDetails}
+    />
+  )
 }

@@ -1,4 +1,4 @@
-import { NewJobForm } from "@/components/new-job-form"
+import { NewJobForm } from "@/components/SheareJobs/new-job-form"
 
 export default function NewJobPage() {
   return (

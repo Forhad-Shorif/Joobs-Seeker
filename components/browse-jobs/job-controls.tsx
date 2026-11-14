@@ -1,7 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 
-import { jobSortOptions, type JobSort } from "@/lib/job-options"
+import { jobSortOptions, type JobSort } from "@/lib/everything/job-options"
 import { ChangeEvent } from "react"
 
 

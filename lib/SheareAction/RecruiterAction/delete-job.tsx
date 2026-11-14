@@ -15,8 +15,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import type { PostedJob } from "@/lib/job"
-import { showToast } from "@/lib/toast"
+import type { PostedJob } from "@/lib/Type/job"
+import { showToast } from "@/lib/utils/toast"
 import { Action } from "./Action"
 
 /**

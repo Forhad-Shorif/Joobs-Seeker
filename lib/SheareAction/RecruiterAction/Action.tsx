@@ -1,4 +1,4 @@
-import type { Job, JobsResponse } from "@/lib/job"
+import type { Job, JobsResponse } from "@/lib/Type/job"
 
 const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
