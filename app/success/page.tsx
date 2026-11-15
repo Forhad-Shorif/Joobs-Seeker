@@ -23,14 +23,16 @@ import { stripe } from "@/lib/stripe"
  *      ৩. stripe.checkout.sessions.retrieve(session_id) দিয়ে Stripe থেকে দেখে
  *         payment_status === "paid" কি না
  *      ৪. paid না হলে → আবার /payment পেজে redirect
- *      ৫. paid হলে → payment history MongoDB-তে save করে (savePayment),
- *         success কার্ড দেখায়, আর ReturnToPage
+ *      ৫. paid হলে → backend-কে শুধু sessionId বলে (savePayment),
+ *         backend নিজে আবার Stripe থেকে verify করে DB-তে save করে।
+ *         তারপর success কার্ড দেখায়, আর ReturnToPage
  *         (plan professional করে ১.২ সেকেন্ড পরে আগের পেজে ফেরত পাঠায়)
  *
  * 📦 data কোথা থেকে:
  *      session_id + from → Stripe-এর redirect URL
  *      paid কিনা → Stripe API (stripe.checkout.sessions.retrieve)
- *      email → checkout session-এর metadata (logged-in user-এর email)
+ *      email/amount/plan → কেউ আমাদের পাঠায় না; backend Stripe থেকে নেয়
+ *                        (তাই ভুয়া data দিয়ে history বানানো যায় না)
  * ==================================================================
  */
 
@@ -67,25 +69,26 @@ export default async function SuccessPage({ searchParams }: PageProps) {
     const session = await stripe.checkout.sessions.retrieve(sessionId)
     paid = session.payment_status === "paid"
 
-    // payment সত্যিই হয়েছে → এই user-এর payment history MongoDB-তে save
-    // (এখানেই history তৈরি হয়, তাই আগে থেকে কোনো ভুয়া record নেই)
-    // email: checkout session-এ রাখা logged-in user-এর email
-    const email = session.metadata?.email || session.customer_details?.email
-
-    if (paid && email) {
-      await savePayment({
-        email,
-        name: session.customer_details?.name ?? undefined,
-        sessionId: session.id,
-        plan: "Professional Tier",
-        amount: session.amount_total ?? 0,
-        currency: session.currency ?? "usd",
-        status: "paid",
-        paidAt: new Date(),
-      })
+    /*
+     * ✅ নতুন নিয়ম: backend-কে শুধু sessionId দিই।
+     *
+     * ❌ আগে এখান থেকে email, amount, plan, currency, status সব পাঠানো হতো।
+     *    backend সেগুলো verify ছাড়াই save করলে যে কেউ ইচ্ছামতো data বসাতে পারত।
+     *
+     * ✅ এখন backend নিজে Stripe-এর কাছে গিয়ে এই sessionId-এর payment_status,
+     *    amount_total, currency, customer email আবার যাচাই করে, তারপর save করে।
+     *    তাই frontend থেকে "কত টাকা" বা "কোন plan" — কিছুই ঠিক হয় না।
+     */
+    if (paid) {
+      await savePayment({ sessionId: session.id })
     }
   } catch (error) {
-    console.error("Stripe session verify failed:", error)
+    /*
+     * backend/DB সমস্যা হলেও পেজ ভাঙবে না —
+     * payment তো Stripe-এ সফলই হয়েছে, তাই user-কে success-ই দেখাব।
+     * (history miss হলে Stripe webhook পরে সেটা ঠিক করে দিতে পারে)
+     */
+    console.error("Stripe session verify / save failed:", error)
   }
 
   // payment হয়নি → আবার payment page

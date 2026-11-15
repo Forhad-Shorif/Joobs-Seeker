@@ -15,7 +15,12 @@ export type JobSalary = {
 }
 
 export type Job = {
-  _id: string
+  /**
+   * নতুন job-এ `_id` পাঠানো হয় না — MongoDB নিজেই বানায়।
+   * (আগে form থেকে `_id: ""` যেত, আর একই `_id: ""` দ্বিতীয়বার
+   *  insert হলে duplicate key error-এ post fail করত।)
+   */
+  _id?: string
   title: string
   company: string
   location: string
@@ -34,8 +39,8 @@ export type Job = {
   website: string
 }
 
-// Backend থেকে আসা job-এ MongoDB-র `_id`-ও থাকে।
-export type PostedJob = Job & {
+// Backend থেকে আসা job-এ MongoDB-র `_id` সবসময় থাকে।
+export type PostedJob = Omit<Job, "_id"> & {
   _id: string
 }
 

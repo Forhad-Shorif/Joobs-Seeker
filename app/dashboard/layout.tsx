@@ -15,7 +15,8 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             <SidebarInset>
                 <DashboardTopbar />
 
-                <main className="flex-1 p-5 sm:p-8">{children}</main>
+                {/* min-w-0 → ভিতরের লম্বা content পুরো page ডানে টেনে দিতে পারবে না */}
+                <main className="min-w-0 flex-1 p-5 sm:p-8">{children}</main>
             </SidebarInset>
         </SidebarProvider>
     )

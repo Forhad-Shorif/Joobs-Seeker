@@ -29,9 +29,9 @@ import {
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { showToast } from "@/lib/utils/toast"
-import type { Job } from "@/lib/Type/job"
+import type { Job, PostedJob } from "@/lib/Type/job"
 import { authClient } from "@/lib/auth-client"
-import { JobsPost } from "@/lib/SheareAction/RecruiterAction/Action"
+import { JobsPost, UpdateJob } from "@/lib/SheareAction/RecruiterAction/Action"
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-white/10 pl-10 pr-3.5 text-sm text-white transition outline-none placeholder:text-white/25 hover:border-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/10"
@@ -119,13 +119,20 @@ function SelectField({
   className = "",
   ...props
 }: SelectFieldProps) {
+  // পুরনো job-এর value option list-এ না থাকলে (যেমন "Customer Support")
+  // সেটাও option হিসেবে দেখাই — নাহলে ভুল option select হয়ে যেত।
+  const rawValue = props.value ?? props.defaultValue
+  const value = typeof rawValue === "string" ? rawValue : ""
+  const allOptions =
+    value && !options.includes(value) ? [value, ...options] : options
+
   return (
     <Field label={label} icon={icon}>
       <select
         className={`${selectClass} appearance-none pr-9 [color-scheme:dark] ${className}`}
         {...props}
       >
-        {options.map((option) => (
+        {allOptions.map((option) => (
           <option
             key={option}
             value={option}
@@ -196,8 +203,34 @@ function Section({
   )
 }
 
+type JobFormProps = {
+  /** থাকলে edit mode — form-এ পুরনো data ভরা থাকবে, submit-এ PATCH যাবে */
+  job?: PostedJob
+}
+
+/** date string → <input type="date">-এর value (YYYY-MM-DD) */
+function toDateInput(value?: string): string {
+  if (!value) return ""
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+
+  return date.toISOString().slice(0, 10)
+}
+
+/** নতুন job post করার form (wrapper) */
 export function NewJobForm() {
+  return <JobForm />
+}
+
+/** পুরনো job edit করার form (wrapper) */
+export function EditJobForm({ job }: { job: PostedJob }) {
+  return <JobForm job={job} />
+}
+
+function JobForm({ job: editingJob }: JobFormProps) {
   const router = useRouter()
+  const isEdit = Boolean(editingJob)
 
   // 💡 Hook component-এর body-তে থাকবে, event handler-এর ভিতরে না।
   const { data: session } = authClient.useSession()
@@ -207,7 +240,8 @@ export function NewJobForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault() // page reload বন্ধ করে.
 
-    const email = session?.user?.email
+    // edit mode-এ job-এর মালিকের email অপরিবর্তিত থাকে
+    const email = editingJob?.email || session?.user?.email
     if (!email) {
       showToast.error("Please sign in to post a job.")
       return
@@ -240,27 +274,28 @@ export function NewJobForm() {
       skills: text("skills"),
       contactEmail: text("contactEmail"),
       website: text("website"),
-      _id: ""
+      // ⚠️ `_id` এখানে দেওয়া হয় না — MongoDB নিজেই বানাবে।
     }
 
-    // const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-
     try {
-      // const response = await fetch(`${backendUrl}/PostJobs`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(job),
-      // })
-      await JobsPost(job)
+      // edit mode → PATCH /UpdateJob/:id, নতুন → POST /PostJobs
+      if (editingJob) {
+        await UpdateJob(editingJob._id, job)
+        showToast.success("Job updated successfully")
+      } else {
+        await JobsPost(job)
+        showToast.success("Job posted successfully")
+      }
 
-      showToast.success("Job posted successfully")
-
-      // list page-এ নিয়ে যাই → নতুন job সাথে সাথে দেখা যাবে
+      // list page-এ নিয়ে যাই → পরিবর্তন সাথে সাথে দেখা যাবে
       router.push("/dashboard/recruiter/jobs")
+      router.refresh()
     } catch (error) {
       console.error("Job save failed:", error)
       showToast.error(
-        error instanceof Error ? error.message : "Could not save job."
+        error instanceof Error
+          ? error.message
+          : `Could not ${isEdit ? "update" : "save"} job.`
       )
     }
   }
@@ -282,6 +317,7 @@ export function NewJobForm() {
               name="title"
               icon={BriefcaseBusiness}
               placeholder="Senior Frontend Developer"
+              defaultValue={editingJob?.title ?? ""}
               required
             />
             <InputField
@@ -289,6 +325,7 @@ export function NewJobForm() {
               name="company"
               icon={Building2}
               placeholder="Northstar Labs"
+              defaultValue={editingJob?.company ?? ""}
               required
             />
             <InputField
@@ -296,6 +333,7 @@ export function NewJobForm() {
               name="location"
               icon={MapPin}
               placeholder="New York, USA"
+              defaultValue={editingJob?.location ?? ""}
               required
             />
             <SelectField
@@ -303,12 +341,14 @@ export function NewJobForm() {
               name="category"
               icon={Layers}
               options={categories}
+              defaultValue={editingJob?.category ?? categories[0]}
             />
             <SelectField
               label="Employment type"
               name="jobType"
               icon={Clock}
               options={jobTypes}
+              defaultValue={editingJob?.jobType ?? jobTypes[0]}
             />
 
             <div>
@@ -322,7 +362,9 @@ export function NewJobForm() {
                       type="radio"
                       name="workplace"
                       value={workplace}
-                      defaultChecked={workplace === "Remote"}
+                      defaultChecked={
+                        (editingJob?.workplace || "Remote") === workplace
+                      }
                       className="peer sr-only"
                     />
                     <span className="flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white/50 transition peer-checked:border-violet-400/60 peer-checked:bg-violet-500/15 peer-checked:text-white hover:border-white/20">
@@ -348,6 +390,7 @@ export function NewJobForm() {
               type="number"
               min={0}
               placeholder="2500"
+              defaultValue={editingJob?.salary?.min ?? ""}
             />
             <InputField
               label="Maximum salary"
@@ -356,32 +399,35 @@ export function NewJobForm() {
               type="number"
               min={0}
               placeholder="4000"
+              defaultValue={editingJob?.salary?.max ?? ""}
             />
             <SelectField
               label="Currency"
               name="currency"
               icon={Globe}
               options={currencies}
+              defaultValue={editingJob?.salary?.currency ?? currencies[0]}
             />
             <SelectField
               label="Salary period"
               name="salaryPeriod"
               icon={Clock}
               options={periods}
-              defaultValue="Per month"
+              defaultValue={editingJob?.salary?.period ?? "Per month"}
             />
             <SelectField
               label="Experience level"
               name="experience"
               icon={Users}
               options={levels}
-              defaultValue="Mid level"
+              defaultValue={editingJob?.experience ?? "Mid level"}
             />
             <InputField
               label="Application deadline"
               name="deadline"
               icon={CalendarDays}
               type="date"
+              defaultValue={toDateInput(editingJob?.deadline)}
             />
           </div>
         </Section>
@@ -397,6 +443,7 @@ export function NewJobForm() {
               name="description"
               placeholder="Tell candidates what the role is about and why it matters."
               rows={5}
+              defaultValue={editingJob?.description ?? ""}
               required
             />
             <InputField
@@ -404,12 +451,14 @@ export function NewJobForm() {
               name="responsibilities"
               icon={FileText}
               placeholder="Build and maintain user interfaces"
+              defaultValue={editingJob?.responsibilities ?? ""}
             />
             <InputField
               label="Requirements"
               name="requirements"
               icon={CheckCircle2}
               placeholder="3+ years of experience with React"
+              defaultValue={editingJob?.requirements ?? ""}
             />
             <InputField
               label="Skills"
@@ -417,6 +466,7 @@ export function NewJobForm() {
               icon={Tag}
               placeholder="React, TypeScript, Tailwind CSS"
               hint="Separate skills with commas."
+              defaultValue={editingJob?.skills ?? ""}
             />
           </div>
         </Section>
@@ -433,6 +483,7 @@ export function NewJobForm() {
               icon={Mail}
               type="email"
               placeholder="hiring@company.com"
+              defaultValue={editingJob?.contactEmail ?? ""}
               required
             />
             <InputField
@@ -441,13 +492,16 @@ export function NewJobForm() {
               icon={Globe}
               type="url"
               placeholder="https://company.com"
+              defaultValue={editingJob?.website ?? ""}
             />
           </div>
         </Section>
 
         <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-white/30">
-            Publish করলে job handshake-এর মতো সাথে সাথে list-এ চলে আসবে।
+            {isEdit
+              ? "Save করলে manage jobs list-এ সাথে সাথে নতুন data দেখাবে।"
+              : "Publish করলে job handshake-এর মতো সাথে সাথে list-এ চলে আসবে।"}
           </p>
 
           <div className="flex gap-3">
@@ -461,8 +515,12 @@ export function NewJobForm() {
               type="submit"
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-medium text-white shadow-[0_0_35px_-12px_rgba(139,92,246,1)] transition hover:bg-violet-500 sm:flex-none"
             >
-              Publish job
-              <Send className="size-4" />
+              {isEdit ? "Save changes" : "Publish job"}
+              {isEdit ? (
+                <CheckCircle2 className="size-4" />
+              ) : (
+                <Send className="size-4" />
+              )}
             </button>
           </div>
         </div>
@@ -502,10 +560,14 @@ export function NewJobForm() {
             Data preview
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/55">
-            Publish করার সাথে সাথেই job list page-এ দেখা যাবে।
+            {isEdit
+              ? "Save করার সাথে সাথেই manage jobs list-এ নতুন data দেখা যাবে।"
+              : "Publish করার সাথে সাথেই job list page-এ দেখা যাবে।"}
           </p>
           <code className="mt-3 block rounded-lg bg-black/40 p-3 text-[11px] text-violet-200">
-            POST /PostJobs → /dashboard/recruiter/jobs
+            {isEdit
+              ? `PATCH /UpdateJob/${editingJob?._id ?? ":id"} → /dashboard/recruiter/jobs`
+              : "POST /PostJobs → /dashboard/recruiter/jobs"}
           </code>
         </div>
       </aside>

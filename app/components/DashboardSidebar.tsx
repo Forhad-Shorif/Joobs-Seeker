@@ -180,11 +180,6 @@ export function DashboardSidebar() {
                     </span>
                 </Link>
 
-                {role === "recruiter" && (
-                    <span className="mt-3 inline-flex w-fit rounded-md border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-white/70">
-                        PREMIUM ACCOUNT
-                    </span>
-                )}
             </SidebarHeader>
 
             {/* ---------- মেনু ---------- */}

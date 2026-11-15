@@ -3,24 +3,25 @@ import { headers } from "next/headers"
 
 import { PaymentView, type BillingRecord } from "@/components/Seeker/payment-view"
 import { auth } from "@/lib/auth"
+import { FREE_APPLICATION_LIMIT } from "@/lib/everything/subscription"
 import { getPayments } from "@/lib/SheareAction/SeekerAction/PaymentAction/payment-store"
 
 /**
  * 📄 app/payment/page.tsx
  * ==================================================================
  * 📌 কী: Subscription & Billing পেজ (route: /payment)।
- *        Free user ১০টার বেশি apply করতে চাইলে এখানেই আসে।
+ *        Free user free-apply limit পার হলে এখানেই আসে (limit: FREE_APPLICATION_LIMIT)।
  *
  * 📌 কে পাঠায়:
- *      ApplyBtn → ১০টা application হয়ে গেলে
+ *      ApplyBtn → free application limit শেষ হলে
  *      /payment?from=/browse-jobs/detailsjobs/xxxx
  *
  * 📌 এই পেজ কী করে:
  *      ১. URL-এর `from` পড়ে → payment শেষে কোথায় ফিরবে (returnTo)
  *      ২. `checkout` থাকলে ছোট message দেখায় (cancelled / failed)
  *      ৩. session থেকে user-এর নাম/ছবি/email নেয় (topbar-এর avatar-এর জন্য)
- *      ৪. ওই email দিয়ে MongoDB-র `payments` collection থেকে নিজের
- *         payment history আনে (getPayments) — শুধু আসল paid record
+ *      ৪. ওই email দিয়ে backend-এর `/PaymentPost/history` API থেকে নিজের
+ *         payment history আনে (getPayments) — শুধু Stripe-verified paid record
  *      ৫. সব UI + data prop আকারে PaymentView-কে দেয়
  *
  * 📌 payment-এর আসল কাজ কোথায়:
@@ -31,12 +32,12 @@ import { getPayments } from "@/lib/SheareAction/SeekerAction/PaymentAction/payme
  * 📦 data কোথা থেকে:
  *      - returnTo   → URL-এর `from` (ApplyBtn দিয়ে আসে)
  *      - user name/ছবি/email → better-auth session
- *      - billing history → MongoDB `payments` collection
- *                          (/success পেজ Stripe verify করার পরে save করে)
+ *      - billing history → আমাদের Express backend (backend/routes/payment.js)
+ *                          যেটা Stripe verify করার পরে MongoDB-তে save করে
  * ==================================================================
  * 🔁 পুরো flow এক নজরে:
  *
- *   ApplyBtn (১১তম apply)
+ *   ApplyBtn (limit পার হওয়ার পরের apply)
  *        ↓
  *   /payment?from=...            (এই পেজ)
  *        ↓ form POST
@@ -74,7 +75,7 @@ function formatAmount(amount: number, currency: string): string {
   }).format(amount / 100)
 }
 
-// MongoDB-র Date → "14 Nov 2026"
+// backend থেকে আসা paidAt (Date) → "14 Nov 2026"
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -94,15 +95,17 @@ export default async function PaymentPage({ searchParams }: PageProps) {
   const returnTo =
     fromValue && fromValue.startsWith("/") ? fromValue : "/dashboard/seeker"
 
-  // উপরের ছোট message
+  // uporer choto message
   const notice =
     checkoutValue === "cancelled"
       ? "Payment was cancelled. You can try again anytime."
       : checkoutValue === "failed"
         ? "Payment could not be started. Please try again."
-        : fromValue
-          ? "You have used all 10 free applications. Upgrade to keep applying — payment শেষে আপনি আগের page-এ ফিরে যাবেন।"
-          : undefined
+        : checkoutValue === "already"
+          ? "You have already completed the payment. Your professional plan is active."
+          : fromValue
+            ? `You have used all ${FREE_APPLICATION_LIMIT} free applications. Upgrade to keep applying — payment sesh e tumi ager page e fire jabe.`
+            : undefined
 
   // topbar-এ user-এর নাম/ছবি দেখানোর জন্য; session না থাকলেও page ভাঙবে না
   let userName: string | undefined

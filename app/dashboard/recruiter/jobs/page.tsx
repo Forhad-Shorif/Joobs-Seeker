@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 
 import PostedJobs from "@/components/SheareJobs/PostedJobs"
 import { auth } from "@/lib/auth"
+import { getRecruiterJobs } from "@/lib/SheareAction/RecruiterAction/Action"
 import type { PostedJob } from "@/lib/Type/job"
 
 export const metadata: Metadata = {
@@ -19,13 +20,7 @@ export const metadata: Metadata = {
  * 2. session email দিয়ে GET /GetJobs/:email
  * 3. data গুলো <PostedJobs />-এ পাঠানো
  */
-async function getRecruiterJobs(): Promise<PostedJob[]> {
-    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-
-    if (!backendUrl) {
-        return []
-    }
-
+async function loadRecruiterJobs(): Promise<PostedJob[]> {
     const session = await auth.api.getSession({
         headers: await headers(),
     })
@@ -37,35 +32,16 @@ async function getRecruiterJobs(): Promise<PostedJob[]> {
     }
 
     try {
-        const response = await fetch(
-            `${backendUrl}/GetJobs/${encodeURIComponent(email)}`,
-            {
-                // প্রতিবার সরাসরি ব্যাকএন্ড থেকে তাজা ডাটা আনি
-                cache: "no-store",
-            }
-        )
-
-        // backend error দিলে (500 + text body) json parse করলে page crash করবে
-        if (!response.ok) {
-            return []
-        }
-
-        const result = await response.json()
-
-        // backend array না দিলে (যেমন { message: ... }) list render ভেঙে যাবে
-        if (!Array.isArray(result)) {
-            return []
-        }
-
-        return result as PostedJob[]
+        return await getRecruiterJobs(email)
     } catch (error) {
+        // backend/session-এ সমস্যা হলে page ভাঙবে না, খালি list দেখাবে
         console.error("GetJobs request failed:", error)
         return []
     }
 }
 
 export default async function JobsPage() {
-    const jobs = await getRecruiterJobs()
+    const jobs = await loadRecruiterJobs()
 
     return (
         <div className="mx-auto max-w-5xl">

@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb"
 import { mongodbAdapter } from "@better-auth/mongo-adapter"
 
 import dns from "node:dns";
+import { admin } from "better-auth/plugins";
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 // .env: MONGODB_SECRET_URL_ID = MongoDB connection string
@@ -16,6 +17,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+      plugins: [
+        admin() 
+    ],
   user: {
     additionalFields: {
       role: {
@@ -31,6 +35,25 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         input: true,
+      },
+      /*
+       * 💳 payment: true hole user professional plan e.
+       * backend (backend/lib/payment.js) Stripe verify korar por ei field
+       * ta set kore, tai login data tei status ta chole ashe.
+       *
+       * input: false — client chaile nijei "payment: true" set korte parbe na.
+       */
+      payment: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
+      // kobe payment koreche (backend set kore)
+      paymentAt: {
+        type: "date",
+        required: false,
+        input: false,
       },
     },
   },

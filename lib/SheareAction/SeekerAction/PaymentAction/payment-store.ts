@@ -1,54 +1,91 @@
 import "server-only"
 
-import type { Collection } from "mongodb"
-
-import { db } from "@/lib/auth"
-
 /**
- * 📄 lib/SheareAction/PaymentAction/payment-store.ts
- * ==================================================================
- * 📌 কী: user-এর payment history MongoDB-তে রাখা/পড়া।
- *        collection: "payments" (database: Jobs-Secar)
+ * Payment er sob backend call ei ek file e.
  *
- * 📌 কে save করে:
- *      /success পেজ — শুধু Stripe থেকে payment_status === "paid"
- *      verify হওয়ার পরে। তাই ভুয়া record কখনো ঢুকবে না।
+ *   savePayment(sessionId)   -> /success page: Stripe verify + DB save
+ *   getPaymentStatus(email)  -> user payment: true kina
+ *   getPayments(email)       -> billing history
  *
- * 📌 কে পড়ে:
- *      /payment পেজ — logged-in user-এর email দিয়ে নিজের history আনে।
- *
- * 📌 কেন sessionId দিয়ে upsert:
- *      /success পেজ refresh করলে একই payment দুইবার save হবে না।
- * ==================================================================
+ * Auth header ekhon pathai na — JWKS setup hole ei file e add hobe.
  */
+
+const API_BASE_URL = (
+  process.env.PAYMENT_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  ""
+).replace(/\/+$/, "")
+
+const TIMEOUT_MS = 10_000
 
 export type PaymentRecord = {
   email: string
-  name?: string
-  // Stripe checkout session id — একই payment দুইবার save আটকায়
+  userId?: string
   sessionId: string
   plan: string
-  // Stripe-এর amount_total (smallest unit, যেমন 2900 = $29.00)
   amount: number
   currency: string
   status: string
   paidAt: Date
 }
 
-function payments(): Collection<PaymentRecord> {
-  return db.collection<PaymentRecord>("payments")
+export type PaymentStatus = {
+  payment: boolean
+  plan: "free" | "professional"
+  paidAt?: string
 }
 
-// payment সফল হলে একবার save হয় (/success পেজ থেকে)
-export async function savePayment(record: PaymentRecord): Promise<void> {
-  await payments().updateOne(
-    { sessionId: record.sessionId },
-    { $setOnInsert: record },
-    { upsert: true }
+// backend er JSON e paidAt string, UI te Date lage
+type RawPayment = Omit<PaymentRecord, "paidAt"> & { paidAt: string }
+
+/** backend e ek jaygay theke call kore — error hole throw kore */
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL .env e set kora nei")
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    ...init,
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "")
+    throw new Error(`${path} failed: ${response.status} ${detail}`.trim())
+  }
+
+  return (await response.json()) as T
+}
+
+/** payment successful hole — /success page theke */
+export async function savePayment(input: {
+  sessionId: string
+}): Promise<PaymentRecord> {
+  const data = await request<RawPayment>("/PaymentPost/checkout-verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: input.sessionId }),
+  })
+
+  return { ...data, paidAt: new Date(data.paidAt) }
+}
+
+/** user payment koreche kina — backend nijei bole dey */
+export async function getPaymentStatus(email: string): Promise<PaymentStatus> {
+  return request<PaymentStatus>(
+    `/PaymentPost/status?email=${encodeURIComponent(email)}`
   )
 }
 
-// একজন user-এর সব payment, নতুনটা আগে
+/** billing history — notun payment age */
 export async function getPayments(email: string): Promise<PaymentRecord[]> {
-  return payments().find({ email }).sort({ paidAt: -1 }).toArray()
+  const data = await request<{ payments?: RawPayment[] }>(
+    `/PaymentPost/history?email=${encodeURIComponent(email)}`
+  )
+
+  return (data.payments ?? []).map((payment) => ({
+    ...payment,
+    paidAt: new Date(payment.paidAt),
+  }))
 }

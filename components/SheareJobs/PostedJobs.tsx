@@ -17,7 +17,6 @@ import {
 } from "lucide-react"
 
 import { JobMeta } from "@/components/SheareJobs/job-meta"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { DeleteJob } from "@/lib/SheareAction/RecruiterAction/delete-job"
 import { formatDeadline, formatSalary } from "@/lib/everything/format"
@@ -224,15 +223,14 @@ function JobCard({ job }: JobCardProps) {
 
         {/* ---------- Right: actions (সবসময় এক row-তে) ---------- */}
         <div className="flex shrink-0 flex-row items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
+          <Link
+            href={`/dashboard/recruiter/jobs/${job._id}/edit`}
             aria-label={`Edit ${job.title}`}
             title="Edit job"
-            className="size-8 rounded-lg border-white/10 bg-white/[0.03] px-0 text-white/70 hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-200"
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/70 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-200"
           >
             <Pencil className="size-3.5" />
-          </Button>
+          </Link>
 
           <DeleteJob job={job} />
         </div>

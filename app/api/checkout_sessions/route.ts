@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
+import { getPaymentStatus } from "@/lib/SheareAction/SeekerAction/PaymentAction/payment-store"
 import { stripe } from "@/lib/stripe"
 
 /**
@@ -50,26 +51,48 @@ export async function POST(request: Request) {
   const headersList = await headers()
   const origin = headersList.get("origin") ?? new URL(request.url).origin
 
-  // logged-in user-এর email — payment history যেন ঠিক এই account-এ save হয়
-  // (Stripe-এর payment page-এ user অন্য email দিলেও history ঠিক থাকবে)
+  // logged-in user — payment ei account e save hobe
   const userSession = await auth.api.getSession({ headers: headersList })
   const userEmail = userSession?.user?.email
+  const userId = userSession?.user?.id
+
+  // login chara payment kora jabe na
+  if (!userEmail) {
+    return NextResponse.redirect(
+      `${origin}/sign-in?callbackUrl=${encodeURIComponent(returnTo)}`,
+      303
+    )
+  }
+
+  // agei pay kore felechen? notun Stripe session banabo na (double payment bondho)
+  try {
+    const status = await getPaymentStatus(userEmail)
+    if (status.payment) {
+      return NextResponse.redirect(
+        `${origin}/payment?from=${encodeURIComponent(returnTo)}&checkout=already`,
+        303
+      )
+    }
+  } catch (error) {
+    // backend down -> payment atkabo na
+    console.error("Payment status check failed:", error)
+  }
 
   try {
     // Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
-          // Professional Tier-এর দাম Stripe ড্যাশবোর্ড থেকে
+          // Professional Tier er dam Stripe dashboard theke
           price: PRICE_ID,
           quantity: 1,
         },
       ],
       mode: "payment",
-      // Stripe-এর পেজে email আগেই ভরা থাকবে
+      // Stripe er page e email agei vora thakbe
       customer_email: userEmail,
-      // success page এই email দিয়ে history save করবে
-      metadata: { email: userEmail ?? "" },
+      // backend ei duita dekhe: email -> history, userId -> duplicate check
+      metadata: { email: userEmail, userId: userId ?? "" },
       // payment শেষে success page → সেখান থেকে আগের page-এ
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&from=${encodeURIComponent(returnTo)}`,
       // user cancel করলে আবার payment page-এ

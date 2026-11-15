@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 
 import {
@@ -18,7 +18,12 @@ import {
     ApplicationPostData,
     UserInformation,
 } from '@/lib/SheareAction/SeekerAction/Action'
-import { isProfessional } from '@/lib/everything/subscription'
+import {
+    FREE_APPLICATION_LIMIT,
+    hasReachedApplicationLimit,
+    remainingFreeApplications,
+} from '@/lib/everything/subscription'
+import { getMyPlanStatus } from '@/lib/SheareAction/SeekerAction/plan'
 import { showToast } from '@/lib/utils/toast'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -26,11 +31,61 @@ import { usePathname, useRouter } from 'next/navigation'
  * Apply করার জন্য যতটুকু job info দরকার।
  * SavedJob আর details page-এর JobDetailsData — দুটোতেই এই field গুলো আছে,
  * তাই একই button দুই জায়গায় ব্যবহার করা যায়।
+ *
+ * ⚠️ job-এর আসল id দুই জায়গায় দুই নামে আসে:
+ *    - details page (PostedJob) → `_id`
+ *    - saved jobs (SavedJob)   → `jobId`
+ * তাই দুটোই optional রাখা, নিচের `jobKey()` যেটা পায় সেটাই নেয়।
  */
 export type ApplyJobInfo = {
     title: string
     company: string
     workplace?: string
+    _id?: string
+    jobId?: string
+}
+
+/** job-এর unique id — source অনুযায়ী `_id` বা `jobId` */
+function jobKey(job: ApplyJobInfo): string {
+    return (job._id || job.jobId || '').trim()
+}
+
+function normalize(value?: string): string {
+    return (value ?? '').trim().toLowerCase()
+}
+
+/**
+ * একই job-এ আবার apply করা আটকানোর helper।
+ *
+ * 🔁 নিয়ম:
+ *   ১. দুই দিকেই jobId থাকলে → jobId মিললেই একই job
+ *      (একই title/company-র দুটো আলাদা job post-ও আলাদা থাকে)
+ *   ২. পুরনো application-এ jobId না থাকলে → title + company দিয়ে মিলাই
+ *      (case/space এড়াতে trim + lowercase)
+ */
+export function isSameApplication(
+    application: { jobId?: string; title?: string; company?: string },
+    job: ApplyJobInfo
+): boolean {
+    const applicationJobId = (application.jobId ?? '').trim()
+    const targetJobId = jobKey(job)
+
+    if (applicationJobId && targetJobId) {
+        return applicationJobId === targetJobId
+    }
+
+    return (
+        normalize(application.title) === normalize(job.title) &&
+        normalize(application.company) === normalize(job.company)
+    )
+}
+
+/** এই job-এ আগেই apply করা আছে কি না */
+export function hasAlreadyApplied(
+    applications: { jobId?: string; title?: string; company?: string }[],
+    job: ApplyJobInfo
+): boolean {
+    return applications.some((application) => isSameApplication(application, job))
 }
 
 /**
@@ -47,24 +102,33 @@ export type ApplyJobInfo = {
  *
  *  [১] "Apply Now" চাপলে
  *      → login নেই? → /sign-in?callbackUrl=<এই পেজ>
- *      → payment করা user? (isProfessional() === true)
+ *      → payment করা user? (server: backend theke user.payment === true)
  *            → কোনো limit নেই, সোজা confirm dialog
  *      → free user? → কতগুলো apply করা আছে দেখি:
  *            ApplicationGetData(email) = GET /ApplicationGet/:email
  *            (Applications পেজে যে তালিকা দেখায়, ঠিক সেটাই)
- *         • ১০ বা তার বেশি → /payment?from=<এই পেজ>
- *         • ১০-এর কম → confirm dialog খোলে
+ *         • আগেই এই job-এ apply করা? → "already applied" toast, quota নষ্ট হয় না
+ *         • FREE_APPLICATION_LIMIT বা তার বেশি → /payment?from=<এই পেজ>
+ *         • কম → confirm dialog খোলে
  *
  *  [২] dialog-এ "Yes, apply" চাপলে
+ *      → limit আবার একবার check (dialog খোলার পরেও অন্য tab-এ apply হতে পারে)
  *      → UserInformation(email) = GET /UserInfoGet/:email (profile)
  *      → ApplicationPostData({...}) = POST /ApplicationPost (apply save)
  *      → সফল হলে বাটন "Applied" হয়ে যায়
+ *
+ * ⚠️ limit-এর আসল number কোথায়:
+ *      lib/everything/subscription.ts → FREE_APPLICATION_LIMIT
+ *      (.env: NEXT_PUBLIC_FREE_APPLICATION_LIMIT, না দিলে 2)
+ *      এখানে কখনো সরাসরি 2 / 10 লিখবে না।
+ *
+ * ⚠️ এটা client-side check। আসল নিরাপত্তার জন্য backend-এও limit check দরকার।
  *
  * 📦 data কোথা থেকে আসে:
  *      - email / name → logged-in session (authClient.useSession)
  *      - profile details → GET /UserInfoGet/:email
  *      - application count → GET /ApplicationGet/:email
- *      - plan (free/pro) → lib/everything/subscription.ts (localStorage)
+ *      - plan (free/pro) → backend /PaymentPost/status (user.payment)
  * ==================================================================
  */
 const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
@@ -81,13 +145,65 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
     const [hasApplied, setHasApplied] = useState(false)
     // limit check চলছে কি না
     const [checking, setChecking] = useState(false)
+    // free plan-এ এখন পর্যন্ত কতটি application জমা হয়েছে (dialog-এ দেখানোর জন্য)
+    const [applicationsUsed, setApplicationsUsed] = useState<number | null>(null)
+    // আসল plan server থেকে ঠিক হয়; null = এখনো জানি না
+    const [isPro, setIsPro] = useState<boolean | null>(null)
+
+    /*
+     * পেজ খোলার সময়ই একবার দেখে নিই — এই job-এ আগে apply করা থাকলে
+     * বাটন "Applied" দেখাবে, তাই আবার click করে ভুল বোঝাবুঝি হবে না।
+     * (এটা শুধু UI-এর জন্য; fail করলে চুপচাপ ignore — click করার সময়
+     *  আবার আসল check হবে।)
+     */
+    useEffect(() => {
+        if (!user?.email || user.role !== 'seeker') return
+
+        let cancelled = false
+
+        ApplicationGetData(user.email)
+            .then((applications) => {
+                if (!cancelled && hasAlreadyApplied(applications, job)) {
+                    setHasApplied(true)
+                }
+            })
+            .catch(() => {
+                // backend fail → কিছুই করি না, click-এর সময় check হবে
+            })
+
+        return () => {
+            cancelled = true
+        }
+        // job object প্রতি render-এ নতুন হতে পারে, তাই ভিতরের field গুলোই dep
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.email, user?.role, job._id, job.jobId, job.title, job.company])
+
+    /**
+     * user professional kina — shudhu backend bole dey (user.payment).
+     *
+     * backend fail korle free dhore nibo — nahole check fail korlei
+     * user unlimited apply kore felto.
+     */
+    const resolveProfessional = async (): Promise<boolean> => {
+        try {
+            const status = await getMyPlanStatus()
+            const professional = status.plan === 'professional'
+            setIsPro(professional)
+            return professional
+        } catch (error) {
+            console.error('Plan check failed, free dhora holo:', error)
+            setIsPro(false)
+            return false
+        }
+    }
 
     /**
      * Apply Now-এ click করলে:
      *  1. login নেই → sign-in page
-     *  2. professional plan → limit নেই, সরাসরি dialog
-     *  3. free plan → কতগুলো apply করা আছে দেখি
-     *     - ১০ বা তার বেশি → payment page (payment না করা পর্যন্ত apply হবে না)
+     *  2. আগেই এই job-এ apply করা → "already applied" (free/pro দুজনের জন্যই)
+     *  3. professional plan → limit নেই, সরাসরি dialog
+     *  4. free plan → কতগুলো apply করা আছে দেখি
+     *     - FREE_APPLICATION_LIMIT বা তার বেশি → payment page
      *     - কম → confirm dialog
      */
     const handleApplyClick = async () => {
@@ -98,27 +214,54 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
             return
         }
 
-        // payment করা user-এর কোনো limit নেই
-        if (isProfessional()) {
-            setOpen(true)
+        if (user.role !== 'seeker') {
+            showToast.error('Only seeker accounts can apply to jobs.')
             return
         }
 
         setChecking(true)
 
         try {
-            // backend fail করলে খালি list ধরি, যাতে user আটকে না যায়
-            const applications = await ApplicationGetData(user.email).catch(
-                () => []
-            )
+            /*
+             * ⚠️ আগে এই check শুধু free user-দের জন্য ছিল, তাই professional
+             * user একই job-এ বারবার apply করতে পারত। এখন সবার আগে
+             * duplicate check — plan যাই হোক।
+             *
+             * ⚠️ আগে এখানে `.catch(() => [])` ছিল — backend একবার fail করলেই
+             * list খালি ধরা হতো, তাই user unlimited apply করতে পারত।
+             * এখন fail করলে ধরা পড়বে, আর user-কে জানানো হবে।
+             */
+            const applications = await ApplicationGetData(user.email)
+            setApplicationsUsed(applications.length)
 
-            if (applications.length >= 10) {
+            // 🔒 এক job-এ একবারই — আগেই apply করা থাকলে dialog খুলবে না
+            if (hasAlreadyApplied(applications, job)) {
+                setHasApplied(true)
+                showToast.error(`You already applied to this job at ${job.company}.`)
+                return
+            }
+
+            // payment করা user-এর কোনো limit নেই (server-verified)
+            if (await resolveProfessional()) {
+                setOpen(true)
+                return
+            }
+
+            if (hasReachedApplicationLimit(applications.length)) {
+                showToast.error(
+                    `You've used all ${FREE_APPLICATION_LIMIT} free applications. Upgrade to keep applying.`
+                )
                 // payment শেষে user এই page-এই ফিরে আসবে
                 router.push(`/payment?from=${encodeURIComponent(pathname)}`)
                 return
             }
 
             setOpen(true)
+        } catch (error) {
+            console.error('Application check failed:', error)
+            showToast.error(
+                'Could not check your previous applications. Please try again.'
+            )
         } finally {
             setChecking(false)
         }
@@ -130,16 +273,45 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
             return
         }
 
+        if (user?.role !== "seeker") {
+            showToast.error('Only seeker accounts can apply to jobs.')
+            return
+        }
+
         setIsApplying(true)
 
         try {
-            // profile data না থাকলেও application আটকাবে না (খালি value যাবে)
-            const profile = await UserInformation(user.email).catch(() => null)
+            /*
+             * ✅ শেষ মুহূর্তের check (free/pro — সবার জন্য)।
+             * dialog খোলার পরেও অন্য tab/device থেকে apply হয়ে যেতে পারে,
+             * তাই POST করার ঠিক আগে আবার দেখি। এতে একই job-এ দ্বিতীয়
+             * application কখনো জমা পড়বে না।
+             */
+            const applications = await ApplicationGetData(user.email)
+            setApplicationsUsed(applications.length)
 
-            if (user?.role !== "seeker") {
-                showToast.error('You are not a Seeker')
+            if (hasAlreadyApplied(applications, job)) {
+                setHasApplied(true)
+                setOpen(false)
+                showToast.error(
+                    `You already applied to this job at ${job.company}.`
+                )
                 return
             }
+
+            const professional = isPro ?? (await resolveProfessional())
+
+            if (!professional && hasReachedApplicationLimit(applications.length)) {
+                setOpen(false)
+                showToast.error(
+                    `You've used all ${FREE_APPLICATION_LIMIT} free applications. Upgrade to keep applying.`
+                )
+                router.push(`/payment?from=${encodeURIComponent(pathname)}`)
+                return
+            }
+
+            // profile data না থাকলেও application আটকাবে না (খালি value যাবে)
+            const profile = await UserInformation(user.email).catch(() => null)
 
             await ApplicationPostData({
                 name: user.name ?? '',
@@ -150,6 +322,9 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
                 skills: profile?.skills ?? [],
                 experience: profile?.experience ?? '',
                 gender: profile?.gender ?? '',
+                // 🔑 jobId গেলে recruiter-এর list-এ job match করা নির্ভুল হয়
+                //    (আর পরের check-এও একই job ধরা পড়ে)
+                jobId: jobKey(job) || undefined,
                 title: job.title,
                 company: job.company,
                 workplace: job.workplace ?? '',
@@ -158,11 +333,23 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
             })
 
             setHasApplied(true)
+            setApplicationsUsed((used) => (used ?? 0) + 1)
             setOpen(false)
             showToast.success(`Application sent to ${job.company}!`)
         } catch (error) {
             console.error('Application failed:', error)
-            showToast.error('Could not submit application. Please try again.')
+
+            // backend 409 দিলে (duplicate) application আর জমা হয়নি
+            if (error instanceof Error && /already applied/i.test(error.message)) {
+                setHasApplied(true)
+                setOpen(false)
+            }
+
+            showToast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not submit application. Please try again.'
+            )
         } finally {
             setIsApplying(false)
         }
@@ -197,6 +384,21 @@ const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
                             at{' '}
                             <span className="font-medium text-white">{job.company}</span>?
                             Your profile details will be sent with this application.
+                            {/*
+                              free plan হলে বাকি কতটি application আছে দেখাই।
+                              applicationsUsed null থাকলে (অর্থাৎ এখনো check হয়নি)
+                              isProfessional() ডাকা হয় না — তাই hydration-এ কোনো
+                              mismatch হয় না।
+                            */}
+                            {applicationsUsed !== null && isPro === false && (
+                                <span className="mt-3 block text-xs text-white/40">
+                                    Free plan: {applicationsUsed} of{' '}
+                                    {FREE_APPLICATION_LIMIT} applications used —{' '}
+                                    <span className="font-medium text-white/70">
+                                        {remainingFreeApplications(applicationsUsed)} left
+                                    </span>
+                                </span>
+                            )}
                         </DialogDescription>
                     </DialogHeader>
 
