@@ -9,6 +9,9 @@ dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const client = new MongoClient(`${process.env.MONGODB_SECRET_URL_ID}`)
 const db = client.db("Jobs-Secar")
 
+// payment history ইত্যাদি same database-এ save করতে reuse করা হয়
+export { db }
+
 export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,

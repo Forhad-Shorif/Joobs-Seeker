@@ -35,16 +35,37 @@ export type ApplyJobInfo = {
 
 /**
  * 📄 components/Seeker/ApplyBtn.tsx
+ * ==================================================================
+ * 📌 কী: "Apply Now" বাটন। একটা job-এ apply করার একমাত্র জায়গা।
  *
- * কেন: একই apply flow দুই জায়গায় — saved jobs list + job details page।
- * কীভাবে:
- * 1. "Apply Now" click → free plan হলে application count check
- *    - ১০ বা বেশি হলে payment page-এ redirect
- *    - কম হলে confirm dialog
- * 2. "Yes, apply" click → profile + job data নিয়ে POST /ApplicationPost
- * 3. success হলে button "Applied" হয়ে যায়
+ * 📌 কোথায় ব্যবহার হয়:
+ *      ১. /dashboard/seeker/saved → Saved Jobs তালিকা
+ *      ২. /browse-jobs/detailsjobs/[id] → Job details পেজ
+ *      দুটো জায়গাতেই একই component, তাই data-ও একই ভাবে যায়।
+ * ==================================================================
+ * 🔁 কীভাবে কাজ করে (ধাপে ধাপে):
  *
- * Data একই ভাবে যায়: user profile (UserInformation) + job-এর title/company/workplace।
+ *  [১] "Apply Now" চাপলে
+ *      → login নেই? → /sign-in?callbackUrl=<এই পেজ>
+ *      → payment করা user? (isProfessional() === true)
+ *            → কোনো limit নেই, সোজা confirm dialog
+ *      → free user? → কতগুলো apply করা আছে দেখি:
+ *            ApplicationGetData(email) = GET /ApplicationGet/:email
+ *            (Applications পেজে যে তালিকা দেখায়, ঠিক সেটাই)
+ *         • ১০ বা তার বেশি → /payment?from=<এই পেজ>
+ *         • ১০-এর কম → confirm dialog খোলে
+ *
+ *  [২] dialog-এ "Yes, apply" চাপলে
+ *      → UserInformation(email) = GET /UserInfoGet/:email (profile)
+ *      → ApplicationPostData({...}) = POST /ApplicationPost (apply save)
+ *      → সফল হলে বাটন "Applied" হয়ে যায়
+ *
+ * 📦 data কোথা থেকে আসে:
+ *      - email / name → logged-in session (authClient.useSession)
+ *      - profile details → GET /UserInfoGet/:email
+ *      - application count → GET /ApplicationGet/:email
+ *      - plan (free/pro) → lib/everything/subscription.ts (localStorage)
+ * ==================================================================
  */
 const ApplyBtn = ({ job }: { job: ApplyJobInfo }) => {
     const router = useRouter()

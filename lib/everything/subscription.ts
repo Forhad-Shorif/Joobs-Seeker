@@ -1,23 +1,34 @@
 /**
  * 📄 lib/everything/subscription.ts
+ * ==================================================================
+ * 📌 কী: user-এর plan মনে রাখার ছোট helper।
+ *        "free" = ১০টা application, "professional" = unlimited।
  *
- * Free plan: সর্বোচ্চ ১০টা job-এ apply করা যায়।
- * Payment সফল হলে plan "professional" হয়ে যায় → limit থাকে না।
+ * 🔁 কীভাবে:
+ *      - payment সফল হলে → /success পেজ → setProfessional() call হয়
+ *      - "Apply Now" চাপলে → ApplyBtn → isProfessional() দেখে limit check করে
  *
- * ⚠️ এটা simple client-side flag (localStorage)।
- * পরে backend-এ subscription save হলে এই flag-এর জায়গায় API check বসবে।
+ * 📦 কোথায় রাখে:
+ *      browser-এর localStorage (key: "hireloop:plan")
+ *
+ * ⚠️ কেন এটা simple রাখা হয়েছে:
+ *      এখন backend-এ subscription API নেই, তাই browser-এ flag রাখা হচ্ছে।
+ *      real project-এ এটা করা উচিত নয় — Stripe webhook দিয়ে backend-এ
+ *      plan save করে ApplyBtn-এ server-side check করা লাগবে,
+ *      নাহলে localStorage clear করলেই ১০-এর limit bypass হবে।
+ * ==================================================================
  */
 
 const PLAN_KEY = "hireloop:plan"
 
-// payment হয়ে professional plan active কি না
+// payment হয়ে professional plan active কি না (ApplyBtn এটা দেখে)
 export function isProfessional(): boolean {
   if (typeof window === "undefined") return false
 
   return window.localStorage.getItem(PLAN_KEY) === "professional"
 }
 
-// payment সফল হলে একবার call হয়
+// payment সফল হলে একবার call হয় (/success পেজ থেকে)
 export function setProfessional(): void {
   if (typeof window === "undefined") return
 

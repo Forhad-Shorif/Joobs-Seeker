@@ -19,8 +19,8 @@ export function DashboardTopbar() {
   // seeker dashboard-এ আলাদা placeholder আর mail icon দেখাই
   const isSeeker = pathname.startsWith("/dashboard/seeker")
 
-  // session না থাকলে ডেমো নাম দেখাবে
-  const name = user?.name?.trim() || "Forhad Shorif"
+  // session না থাকলে ভুয়া নাম নয়
+  const name = user?.name?.trim() || "Guest"
   const initial = name.charAt(0).toUpperCase()
 
   return (
@@ -50,7 +50,6 @@ export function DashboardTopbar() {
             className="relative grid size-10 place-items-center rounded-full text-white/60 transition hover:bg-white/[0.06] hover:text-white"
           >
             <Mail className="size-[18px]" />
-            <span className="absolute top-2 right-2.5 size-1.5 rounded-full bg-rose-500 ring-2 ring-[#08080a]" />
           </button>
         )}
 
@@ -61,7 +60,6 @@ export function DashboardTopbar() {
           className="relative grid size-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/60 transition hover:bg-white/[0.06] hover:text-white"
         >
           <Bell className="size-[18px]" />
-          <span className="absolute top-2 right-2.5 size-1.5 rounded-full bg-rose-500 ring-2 ring-[#08080a]" />
         </button>
 
         <span className="hidden h-8 w-px bg-white/10 sm:block" />
@@ -72,7 +70,7 @@ export function DashboardTopbar() {
             <span className="hidden text-right sm:block">
               <span className="block text-sm font-medium text-white">{name}</span>
               <span className="block text-[11px] text-white/40">
-                TechFlow Inc.
+                {user?.email || "—"}
               </span>
             </span>
           )}

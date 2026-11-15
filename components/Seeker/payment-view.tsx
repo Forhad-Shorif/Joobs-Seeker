@@ -1,39 +1,74 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   Bell,
   Check,
+  CreditCard,
   Download,
-  Loader2,
   Mail,
   Search,
 } from "lucide-react"
 
-import { isProfessional, setProfessional } from "@/lib/everything/subscription"
-import { showToast } from "@/lib/utils/toast"
-
 /**
  * 📄 components/Seeker/payment-view.tsx
- * কাজ: Subscription & Billing page-এর পুরো UI।
+ * ==================================================================
+ * 📌 কী: Subscription & Billing পেজের শুধু UI (দেখতে কেমন হবে)।
+ *        এখানে কোনো payment logic নেই — logic থাকে app/payment/page.tsx এবং
+ *        app/api/checkout_sessions/route.ts এ।
  *
- * Simple flow:
- *  1. user ApplyBtn থেকে এখানে আসে → /payment?from=/browse-jobs/detailsjobs/xxx
- *  2. "Upgrade Plan" click → একটু processing দেখিয়ে payment success ধরি
- *  3. তারপর router.replace(from) → user আগের page-এই ফিরে যায়
+ * 📌 কোন জিনিস কোথা থেকে আসে (props):
+ *      - userName / userImage → Topbar-এর avatar
+ *      - returnTo             → payment শেষে কোথায় ফিরবে
+ *      - notice               → উপরের ছোট message (limit শেষ / cancel / fail)
+ *      - paymentMethod        → saved card (এখনো নেই); না থাকলে empty state
+ *      - billingHistory       → MongoDB `payments` collection থেকে আসা
+ *                               আসল payment তালিকা; না থাকলে empty state
  *
- * (আসল payment gateway এখনো যুক্ত হয়নি — এটা UI + navigation flow)
+ * 📌 "Upgrade Plan" বাটনটা আসলে একটা form:
+ *      <form action="/api/checkout_sessions" method="POST">
+ *        <input type="hidden" name="from" value={returnTo} />
+ *        <button type="submit">Upgrade Plan</button>
+ *      </form>
+ *      → submit করলে সরাসরি Stripe session বানানো হয় (কোনো fake payment নয়)
+ *
+ * ⚠️ কেন empty state:
+ *      নতুন user কখনো payment করেনি, তাই তার কাছে ভুয়া card (•••• 4242)
+ *      বা ভুয়া billing history দেখানো যাবে না। data না এলে empty state দেখায়।
+ * ==================================================================
  */
 
+// একটা saved card-এর তথ্য (backend/Stripe থেকে আসবে)
+export type PaymentMethodInfo = {
+  brand: string // "VISA"
+  last4: string // "4242"
+  holder: string // card holder name
+  expires: string // "12/25"
+}
+
+// একটা payment record (payment সফল হলেই তৈরি হবে)
+export type BillingRecord = {
+  id: string
+  date: string
+  plan: string
+  amount: string
+  status: string
+}
+
 type PaymentViewProps = {
-  // payment শেষে কোথায় ফিরে যাবে
-  returnTo: string
-  // ApplyBtn থেকে পাঠানো হয়েছে কি না (limit শেষ)
-  showLimitNotice: boolean
   userName?: string
   userImage?: string
+  // payment শেষে user কোন page-এ ফিরবে (form-এ hidden input হিসেবে যায়)
+  returnTo: string
+  // উপরে ছোট message (যেমন: apply limit শেষ / gateway connect করা নেই)
+  notice?: string
+  // user-এর saved card — না থাকলে empty state
+  paymentMethod?: PaymentMethodInfo | null
+  // user-এর payment history — না থাকলে empty state
+  billingHistory?: BillingRecord[]
+  // এখনো যে feature নেই, তার handler না দিলে button disable থাকবে
+  onAddPaymentMethod?: () => void
+  onManagePlan?: () => void
 }
 
 const cardClass = "rounded-2xl border border-white/[0.07] bg-[#101012]"
@@ -46,101 +81,87 @@ const planFeatures = [
   "Direct Recruiter Messaging",
 ]
 
-// demo billing history (backend billing API আসলে এখান থেকে আসবে)
-const billingHistory = [
-  {
-    date: "Sep 24, 2023",
-    plan: "Professional Tier",
-    amount: "$29.00",
-    id: "TRX-948102-HIL",
-    status: "Paid",
-  },
-  {
-    date: "Aug 24, 2023",
-    plan: "Professional Tier",
-    amount: "$29.00",
-    id: "TRX-771929-HIL",
-    status: "Paid",
-  },
-  {
-    date: "Jul 24, 2023",
-    plan: "Professional Tier",
-    amount: "$29.00",
-    id: "TRX-331085-HIL",
-    status: "Paid",
-  },
-  {
-    date: "Jun 24, 2023",
-    plan: "Standard Tier",
-    amount: "$12.00",
-    id: "TRX-220199-HIL",
-    status: "Paid",
-  },
-]
+const upgradeButtonClass =
+  "inline-flex h-11 min-w-[150px] items-center justify-center rounded-md bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
 
-const tableHead = "px-5 py-4 text-left text-xs font-medium text-white/45"
+// Billing history → CSV download।
+// কোনো backend লাগে না — props-এ যে আসল data আছে, সেটাই CSV হয়।
+function exportHistory(rows: BillingRecord[]) {
+  const lines = [
+    ["Date", "Plan", "Amount", "Transaction ID", "Status"],
+    ...rows.map((row) => [
+      row.date,
+      row.plan,
+      row.amount,
+      row.id,
+      row.status,
+    ]),
+  ]
+
+  const csv = lines.map((line) => line.join(",")).join("\n")
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
+
+  const link = document.createElement("a")
+  link.href = url
+  link.download = "hireloop-billing-history.csv"
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
+function CreditCardVisual({ method }: { method: PaymentMethodInfo }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[#1b1b1f] to-[#101012] p-5">
+      <div className="flex items-start justify-between">
+        {/* chip */}
+        <span className="h-7 w-9 rounded-md bg-gradient-to-br from-amber-200/85 to-amber-600/70" />
+        <span className="text-sm font-bold tracking-[0.08em] text-white/85 italic">
+          {method.brand}
+        </span>
+      </div>
+
+      <p className="mt-6 flex items-center gap-2.5 text-sm tracking-[0.22em] text-white/80">
+        <span aria-hidden>••••</span>
+        <span aria-hidden>••••</span>
+        <span aria-hidden>••••</span>
+        <span>{method.last4}</span>
+      </p>
+
+      <div className="mt-6 flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[9px] tracking-[0.14em] text-white/35 uppercase">
+            Card Holder
+          </p>
+          <p className="mt-1 truncate text-[11px] font-medium tracking-[0.06em] text-white/75 uppercase">
+            {method.holder}
+          </p>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="text-[9px] tracking-[0.14em] text-white/35 uppercase">
+            Expires
+          </p>
+          <p className="mt-1 text-[11px] font-medium text-white/75">
+            {method.expires}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function PaymentView({
-  returnTo,
-  showLimitNotice,
   userName,
   userImage,
+  returnTo,
+  notice,
+  paymentMethod = null,
+  billingHistory = [],
+  onAddPaymentMethod,
+  onManagePlan,
 }: PaymentViewProps) {
-  const router = useRouter()
-
-  // payment চলছে কি না (button-এ spinner দেখানোর জন্য)
-  const [paying, setPaying] = useState(false)
-
   const holderName = (userName?.trim() || "HireLoop Seeker").toUpperCase()
   const initial = holderName.charAt(0)
-
-  /**
-   * Simple payment:
-   * click → ১ সেকেন্ড processing → success toast → আগের page-এ replace।
-   */
-  const handlePayment = () => {
-    if (paying) return
-
-    // আগেই payment করা থাকলে আবার payment দেখানোর দরকার নেই
-    if (isProfessional()) {
-      router.replace(returnTo)
-      return
-    }
-
-    setPaying(true)
-
-    setTimeout(() => {
-      // payment সফল → professional plan, তাই আর ১০টার limit থাকবে না
-      setProfessional()
-
-      showToast.success("Payment successful. Welcome back!")
-      router.replace(returnTo)
-    }, 1000)
-  }
-
-  // billing history CSV download (কোনো library ছাড়া)
-  const handleExport = () => {
-    const rows = [
-      ["Date", "Plan", "Amount", "Transaction ID", "Status"],
-      ...billingHistory.map((row) => [
-        row.date,
-        row.plan,
-        row.amount,
-        row.id,
-        row.status,
-      ]),
-    ]
-
-    const csv = rows.map((row) => row.join(",")).join("\n")
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
-
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "hireloop-billing-history.csv"
-    link.click()
-
-    URL.revokeObjectURL(url)
-  }
 
   return (
     <div className="min-h-svh bg-[#050505] text-white">
@@ -204,21 +225,20 @@ export function PaymentView({
           billing history.
         </p>
 
-        {/* Apply limit শেষ হয়ে এলে ছোট notice */}
-        {showLimitNotice && (
+        {/* page থেকে আসা message (limit শেষ / gateway নেই) */}
+        {notice && (
           <div className="mt-6 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            You have used all 10 free applications. Upgrade to keep applying —
-            payment শেষে আপনি আগের page-এ ফিরে যাবেন।
+            {notice}
           </div>
         )}
 
         {/* ---------- plan + payment method ---------- */}
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[1.25fr_1fr]">
-          {/* Current plan */}
+          {/* Professional plan */}
           <section className={`${cardClass} p-6 sm:p-8`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <span className="rounded border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-                Current Plan
+                Pro Plan
               </span>
 
               <div className="text-right">
@@ -229,7 +249,7 @@ export function PaymentView({
                   </span>
                 </p>
                 <p className="mt-1 text-xs text-white/40">
-                  Next billing date: Oct 24, 2023
+                  Billed monthly after upgrade
                 </p>
               </div>
             </div>
@@ -256,22 +276,26 @@ export function PaymentView({
             </ul>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handlePayment}
-                disabled={paying}
-                className="inline-flex h-11 min-w-[150px] items-center justify-center gap-2 rounded-md bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {paying && <Loader2 className="size-4 animate-spin" />}
-                {paying ? "Processing..." : "Upgrade Plan"}
-              </button>
+              {/*
+                👉 Stripe Checkout form
+                submit করলে app/api/checkout_sessions/route.ts চলবে,
+                সেখানে Stripe session বানিয়ে checkout url-এ redirect করতে হবে।
+                `from` hidden input-এ যায়, যাতে payment শেষে user
+                ঠিক আগের page-এ ফিরে আসতে পারে।
+              */}
+              <form action="/api/checkout_sessions" method="POST">
+                <input type="hidden" name="from" value={returnTo} />
+
+                <button type="submit" className={upgradeButtonClass}>
+                  Upgrade Plan
+                </button>
+              </form>
 
               <button
                 type="button"
-                onClick={() =>
-                  showToast.success("Professional Tier is already active.")
-                }
-                className="inline-flex h-11 items-center justify-center rounded-md bg-[#2a2a2d] px-6 text-sm font-medium text-white/85 transition hover:bg-[#333337]"
+                onClick={onManagePlan}
+                disabled={!onManagePlan}
+                className="inline-flex h-11 items-center justify-center rounded-md bg-[#2a2a2d] px-6 text-sm font-medium text-white/85 transition hover:bg-[#333337] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Manage Plan
               </button>
@@ -290,48 +314,32 @@ export function PaymentView({
               </span>
             </div>
 
-            {/* credit card visual */}
-            <div className="mt-5 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[#1b1b1f] to-[#101012] p-5">
-              <div className="flex items-start justify-between">
-                {/* chip */}
-                <span className="h-7 w-9 rounded-md bg-gradient-to-br from-amber-200/85 to-amber-600/70" />
-                <span className="text-sm font-bold tracking-[0.08em] text-white/85 italic">
-                  VISA
-                </span>
-              </div>
+            <div className="mt-5">
+              {paymentMethod ? (
+                <CreditCardVisual method={paymentMethod} />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-5 py-10 text-center">
+                  <span className="grid size-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/40">
+                    <CreditCard className="size-5" />
+                  </span>
 
-              <p className="mt-6 flex items-center gap-2.5 text-sm tracking-[0.22em] text-white/80">
-                <span aria-hidden>••••</span>
-                <span aria-hidden>••••</span>
-                <span aria-hidden>••••</span>
-                <span>4242</span>
-              </p>
-
-              <div className="mt-6 flex items-end justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-[9px] tracking-[0.14em] text-white/35 uppercase">
-                    Card Holder
-                  </p>
-                  <p className="mt-1 truncate text-[11px] font-medium tracking-[0.06em] text-white/75 uppercase">
-                    {holderName}
-                  </p>
+                  <div>
+                    <p className="text-sm font-medium text-white/70">
+                      No payment method added
+                    </p>
+                    <p className="mt-1 text-xs text-white/40">
+                      Add a card to upgrade to the Professional Tier.
+                    </p>
+                  </div>
                 </div>
-
-                <div className="shrink-0 text-right">
-                  <p className="text-[9px] tracking-[0.14em] text-white/35 uppercase">
-                    Expires
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-white/75">
-                    12/25
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
 
             <button
               type="button"
-              onClick={() => showToast.success("Payment method form coming soon.")}
-              className="mt-6 w-full py-1 text-center text-sm text-white/55 transition hover:text-white"
+              onClick={onAddPaymentMethod}
+              disabled={!onAddPaymentMethod}
+              className="mt-6 w-full py-1 text-center text-sm text-white/55 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               + Add New Payment Method
             </button>
@@ -347,49 +355,70 @@ export function PaymentView({
 
             <button
               type="button"
-              onClick={handleExport}
-              className="inline-flex items-center gap-2 text-sm text-white/60 transition hover:text-white"
+              onClick={() => exportHistory(billingHistory)}
+              disabled={billingHistory.length === 0}
+              className="inline-flex items-center gap-2 text-sm text-white/60 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Download className="size-4" />
               Export
             </button>
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-xl border border-white/[0.07] bg-[#101012]">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-b border-white/[0.07] text-white/45">
-                <tr>
-                  <th className={tableHead}>Date</th>
-                  <th className={tableHead}>Plan</th>
-                  <th className={tableHead}>Amount</th>
-                  <th className={tableHead}>Transaction ID</th>
-                  <th className={`${tableHead} text-right`}>Status</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {billingHistory.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.02]"
-                  >
-                    <td className="px-5 py-5 text-white/75">{row.date}</td>
-                    <td className="px-5 py-5 text-white/75">{row.plan}</td>
-                    <td className="px-5 py-5 text-white/75">{row.amount}</td>
-                    <td className="px-5 py-5 text-xs tracking-[0.06em] text-white/45">
-                      {row.id}
-                    </td>
-                    <td className="px-5 py-5 text-right">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-emerald-400 uppercase">
-                        <span className="size-1.5 rounded-full bg-emerald-400" />
-                        {row.status}
-                      </span>
-                    </td>
+          {billingHistory.length === 0 ? (
+            // নতুন user — কোনো payment হয়নি, তাই ভুয়া row নেই
+            <div className="mt-5 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-5 py-12 text-center">
+              <p className="text-sm text-white/60">No billing history yet.</p>
+              <p className="mt-1 text-xs text-white/35">
+                Your payments will appear here after your first billing.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-5 overflow-x-auto rounded-xl border border-white/[0.07] bg-[#101012]">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="border-b border-white/[0.07] text-white/45">
+                  <tr>
+                    <th className="px-5 py-4 text-left text-xs font-medium">
+                      Date
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-medium">
+                      Plan
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-medium">
+                      Amount
+                    </th>
+                    <th className="px-5 py-4 text-left text-xs font-medium">
+                      Transaction ID
+                    </th>
+                    <th className="px-5 py-4 text-right text-xs font-medium">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody>
+                  {billingHistory.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.02]"
+                    >
+                      <td className="px-5 py-5 text-white/75">{row.date}</td>
+                      <td className="px-5 py-5 text-white/75">{row.plan}</td>
+                      <td className="px-5 py-5 text-white/75">{row.amount}</td>
+                      <td className="px-5 py-5 text-xs tracking-[0.06em] text-white/45">
+                        {row.id}
+                      </td>
+                      <td className="px-5 py-5 text-right">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-emerald-400 uppercase">
+                          <span className="size-1.5 rounded-full bg-emerald-400" />
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {/* ---------- help ---------- */}
@@ -414,15 +443,12 @@ export function PaymentView({
               Contact Support
             </a>
 
-            <button
-              type="button"
-              onClick={() =>
-                showToast.success("Full refund available within 7 days.")
-              }
+            <Link
+              href="/terms"
               className="text-sm text-white/60 underline underline-offset-4 transition hover:text-white"
             >
               Read Refund Policy
-            </button>
+            </Link>
           </div>
         </section>
       </main>

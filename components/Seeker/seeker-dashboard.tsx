@@ -1,31 +1,62 @@
 "use client"
 
 import Link from "next/link"
-import type { ReactNode } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
   Bookmark,
   CalendarDays,
-  Mail,
   Pencil,
   Plus,
-  Repeat2,
   Send,
   Sparkles,
   Trophy,
   UserRound,
 } from "lucide-react"
 
-import { authClient } from "@/lib/auth-client"
-
 /**
- * 📄 components/seeker/seeker-dashboard.tsx
- * কাজ: seeker dashboard-এর main content — stats, profile, application status
- * আর recent activity. Sidebar/topbar dashboard layout থেকেই আসে।
+ * 📄 components/Seeker/seeker-dashboard.tsx
+ * ==================================================================
+ * 📌 কী: seeker dashboard-এর main content — stat cards, profile,
+ *        Application Status bar আর Recent Activity।
+ *        Sidebar / topbar dashboard layout থেকেই আসে।
+ *
+ * 📦 data কোথা থেকে (সবই prop আকারে আসে, এখানে কোনো demo data নেই):
+ *      - userName / userEmail / userImage → better-auth session
+ *      - savedJobsCount   → GET /SeekerGet/:email
+ *      - applicationsCount / interviewsCount / offersCount
+ *      - statusCounts     → GET /ApplicationGet/:email থেকে page-এ হিসাব হয়
+ *      - recentApplications → ওই applications-এর নতুন ৩টা
+ *
+ * ⚠️ আগে এখানে 24 / 3 / 1, "Sarah Jenkins", "TechFlow" ইত্যাদি লিখে রাখা
+ *    demo data ছিল — সব সরানো হয়েছে। এখন যত apply করেছ, ঠিক ততটাই দেখাবে।
+ * ==================================================================
  */
 
+// page থেকে হিসাব করা status count
+export type StatusCount = {
+  label: string
+  count: number
+}
+
+// Recent Activity-র একটা row (আসল application থেকে)
+export type RecentApplication = {
+  id: string
+  title: string
+  company: string
+  status: string
+  time: string
+}
+
 type SeekerDashboardProps = {
+  userName?: string
+  userEmail?: string
+  userImage?: string
   savedJobsCount: number
+  applicationsCount: number
+  interviewsCount: number
+  offersCount: number
+  statusCounts: StatusCount[]
+  recentApplications: RecentApplication[]
 }
 
 type StatItem = {
@@ -34,80 +65,55 @@ type StatItem = {
   icon: LucideIcon
 }
 
-type StatusItem = {
-  label: string
-  count: number
-  width: string
-  barClass: string
+// status অনুযায়ী bar-এর রঙ
+const STATUS_BAR: Record<string, string> = {
+  Applied: "bg-white",
+  "Under Review": "bg-amber-400",
+  Shortlisted: "bg-blue-500",
+  Rejected: "bg-rose-500",
+  Offered: "bg-emerald-500",
 }
 
-type ActivityItem = {
-  icon: LucideIcon
-  iconClass: string
-  text: ReactNode
-  time: string
+// status অনুযায়ী text-এর রঙ (Recent Activity-তে)
+const STATUS_TEXT: Record<string, string> = {
+  Applied: "text-white/75",
+  Review: "text-amber-400",
+  "Under Review": "text-amber-400",
+  Shortlisted: "text-emerald-400",
+  Interview: "text-sky-400",
+  Rejected: "text-rose-400",
+  Offered: "text-emerald-400",
 }
 
-// image-এর মতো fixed demo data — পরে backend data দিয়ে replace করা যাবে।
-const applicationStatus: readonly StatusItem[] = [
-  { label: "Applied", count: 10, width: "100%", barClass: "bg-white" },
-  { label: "Under Review", count: 6, width: "60%", barClass: "bg-amber-400" },
-  { label: "Shortlisted", count: 5, width: "50%", barClass: "bg-blue-500" },
-  { label: "Rejected", count: 2, width: "20%", barClass: "bg-rose-500" },
-  { label: "Offered", count: 1, width: "10%", barClass: "bg-emerald-500" },
-]
+function statusTextClass(status: string) {
+  return STATUS_TEXT[status] ?? "text-white/75"
+}
 
-const recentActivity: readonly ActivityItem[] = [
-  {
-    icon: Repeat2,
-    iconClass: "bg-white/[0.04] text-white/60",
-    text: (
-      <>
-        Application for <strong className="font-semibold text-white">Senior Product Designer</strong> at
-        TechFlow updated to{" "}
-        <span className="font-medium text-amber-400 underline underline-offset-4">Under Review</span>
-      </>
-    ),
-    time: "2 hours ago",
-  },
-  {
-    icon: Sparkles,
-    iconClass: "bg-emerald-500/10 text-emerald-400",
-    text: (
-      <>
-        <strong className="font-semibold text-white">New Job Alert:</strong> Lead Frontend Engineer at
-        FinGrid matches your profile.
-      </>
-    ),
-    time: "5 hours ago",
-  },
-  {
-    icon: Mail,
-    iconClass: "bg-white/[0.04] text-white/60",
-    text: (
-      <>
-        You have a new message from{" "}
-        <strong className="font-semibold text-white">Sarah Jenkins</strong> (Hiring Manager at CloudOps).
-      </>
-    ),
-    time: "1 day ago",
-  },
-]
+export function SeekerDashboard({
+  userName,
+  userEmail,
+  userImage,
+  savedJobsCount,
+  applicationsCount,
+  interviewsCount,
+  offersCount,
+  statusCounts,
+  recentApplications,
+}: SeekerDashboardProps) {
+  // login না থাকলে ভুয়া নাম নয় — নিরপেক্ষ fallback
+  const name = userName?.trim() || "Your profile"
+  const email = userEmail || ""
 
-export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
-  const { data: session } = authClient.useSession()
-  const user = session?.user
-
-  // login না থাকলে preview-এর জন্য image-এর নাম/email দেখাই
-  const name = user?.name?.trim() || "Alex Rivera"
-  const email = user?.email || "alex.rivera@example.com"
-
+  // ৪টা stat card — সব আসল count
   const stats: readonly StatItem[] = [
     { label: "Saved Jobs", value: savedJobsCount, icon: Bookmark },
-    { label: "Applications Submitted", value: 24, icon: Send },
-    { label: "Interviews Scheduled", value: 3, icon: CalendarDays },
-    { label: "Offers Received", value: 1, icon: Trophy },
+    { label: "Applications Submitted", value: applicationsCount, icon: Send },
+    { label: "Interviews Scheduled", value: interviewsCount, icon: CalendarDays },
+    { label: "Offers Received", value: offersCount, icon: Trophy },
   ]
+
+  // bar-এর width = count / total; কোনো application না থাকলে 0
+  const maxCount = Math.max(applicationsCount, 1)
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -122,7 +128,9 @@ export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
               className="rounded-2xl border border-white/[0.07] bg-[#101012] p-5"
             >
               <div className="flex items-start justify-between gap-4">
-                <p className="max-w-[8rem] text-sm leading-snug text-white/55">{stat.label}</p>
+                <p className="max-w-[8rem] text-sm leading-snug text-white/55">
+                  {stat.label}
+                </p>
                 <Icon className="size-5 shrink-0 text-white/45" />
               </div>
 
@@ -140,9 +148,9 @@ export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
         <div className="rounded-2xl border border-white/[0.07] bg-[#101012] p-5 sm:p-6">
           <div className="flex items-center gap-5">
             <span className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-full bg-white/[0.06] text-white/45 ring-1 ring-white/10">
-              {user?.image ? (
+              {userImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.image} alt={name} className="size-full object-cover" />
+                <img src={userImage} alt={name} className="size-full object-cover" />
               ) : (
                 <UserRound className="size-10" strokeWidth={1.5} />
               )}
@@ -152,7 +160,9 @@ export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
               <h2 className="truncate text-2xl font-semibold tracking-tight text-white">
                 {name}
               </h2>
-              <p className="mt-1.5 truncate text-sm text-white/45">{email}</p>
+              {email && (
+                <p className="mt-1.5 truncate text-sm text-white/45">{email}</p>
+              )}
             </div>
           </div>
 
@@ -165,36 +175,52 @@ export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
           </Link>
         </div>
 
-        {/* application status card */}
+        {/* application status card — আসল application থেকে */}
         <div className="rounded-2xl border border-white/[0.07] bg-[#101012] p-5 sm:p-6">
           <h2 className="text-lg font-semibold tracking-tight text-white">
             Application Status
           </h2>
 
-          <div className="mt-6 space-y-5">
-            {applicationStatus.map((item) => (
-              <div key={item.label}>
-                <div className="flex items-center justify-between gap-4 text-xs">
-                  <span className="text-white/55">{item.label}</span>
-                  <span className="font-medium text-white/80">{item.count}</span>
-                </div>
+          {applicationsCount === 0 ? (
+            <div className="mt-6 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-5 py-10 text-center">
+              <p className="text-sm text-white/60">No applications yet.</p>
+              <Link
+                href="/browse-jobs"
+                className="mt-2 inline-block text-sm text-violet-300 hover:text-violet-200"
+              >
+                Browse Jobs
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-5">
+              {statusCounts.map((item) => (
+                <div key={item.label}>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <span className="text-white/55">{item.label}</span>
+                    <span className="font-medium text-white/80">{item.count}</span>
+                  </div>
 
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className={`h-full rounded-full ${item.barClass}`}
-                    style={{ width: item.width }}
-                  />
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className={`h-full rounded-full ${STATUS_BAR[item.label] ?? "bg-white/40"}`}
+                      style={{
+                        width: `${Math.round((item.count / maxCount) * 100)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       {/* ---------- recent activity ---------- */}
       <section className="pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold tracking-tight text-white">Recent Activity</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">
+            Recent Activity
+          </h2>
           <Link
             href="/dashboard/seeker/application"
             className="text-sm text-white/50 underline underline-offset-4 transition hover:text-white"
@@ -203,30 +229,53 @@ export function SeekerDashboard({ savedJobsCount }: SeekerDashboardProps) {
           </Link>
         </div>
 
-        <div className="mt-5 space-y-3">
-          {recentActivity.map((item) => {
-            const Icon = item.icon
+        {recentApplications.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-5 py-12 text-center">
+            <p className="text-sm text-white/60">No activity yet.</p>
+            <p className="mt-1 text-xs text-white/35">
+              Apply to a job and your activity will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {recentApplications.map((item) => {
+              // Offered/Shortlisted হলে অন্য icon, নাহলে Send
+              const lower = item.status.toLowerCase()
+              const Icon = lower.includes("offer")
+                ? Trophy
+                : lower.includes("shortlist")
+                  ? Sparkles
+                  : Send
 
-            return (
-              <div
-                key={item.time}
-                className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-[#101012] p-4 sm:flex-row sm:items-center sm:gap-4"
-              >
-                <span
-                  className={`grid size-10 shrink-0 place-items-center rounded-full ${item.iconClass}`}
+              return (
+                <Link
+                  key={item.id}
+                  href={`/dashboard/seeker/application/applicationdetails/${item.id}`}
+                  className="flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-[#101012] p-4 transition hover:border-white/15 sm:flex-row sm:items-center sm:gap-4"
                 >
-                  <Icon className="size-4" />
-                </span>
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/[0.04] text-white/60">
+                    <Icon className="size-4" />
+                  </span>
 
-                <p className="min-w-0 flex-1 text-sm leading-relaxed text-white/55">
-                  {item.text}
-                </p>
+                  <p className="min-w-0 flex-1 text-sm leading-relaxed text-white/55">
+                    You applied for{" "}
+                    <strong className="font-semibold text-white">
+                      {item.title}
+                    </strong>{" "}
+                    at {item.company} —{" "}
+                    <span className={`font-medium ${statusTextClass(item.status)}`}>
+                      {item.status}
+                    </span>
+                  </p>
 
-                <span className="shrink-0 text-xs text-white/35 sm:text-sm">{item.time}</span>
-              </div>
-            )
-          })}
-        </div>
+                  <span className="shrink-0 text-xs text-white/35 sm:text-sm">
+                    {item.time}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       {/* ---------- image-এর নিচের ডান দিকের plus button ---------- */}
